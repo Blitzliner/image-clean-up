@@ -1,0 +1,38 @@
+# Beispiel für ereignisse.yaml – kopieren/umbenennen nach "ereignisse.yaml"
+# (oder "uv run fotosort analysieren --interaktiv" legt die Datei selbst an).
+#
+# Ordnername = Startmonat + Name, z.B. "2026-05_Urlaub_Frankreich"
+
+ereignisse:
+  # Urlaub mit festem Zeitraum: ALLE Bilder (auch WhatsApp, eigenes Handy
+  # ohne GPS) aus diesem Zeitraum kommen in den Ordner.
+  - name: Urlaub Frankreich Frühjahr
+    von: 2026-05-24
+    bis: 2026-05-28
+
+  - name: Urlaub Frankreich Herbst
+    von: 2026-10-10
+    bis: 2026-10-18
+
+  # Wiederkehrender Ort OHNE Datum: jeder Besuch bekommt einen eigenen Ordner
+  # (z.B. "2026-03_Bouldern" und "2026-10_Bouldern") – nie zusammengemischt.
+  # Gilt nur für Bilder mit (geschätzter) GPS-Position im Umkreis.
+  - name: Bouldern
+    ort: {lat: 50.36, lon: 7.59, radius_km: 2}
+
+  # Feier an einem Tag
+  - name: Geburtstag Oma
+    von: 2026-08-15
+
+  # Schlüsselwort: passt auf Datei-/Ordnernamen oder Ortsnamen,
+  # z.B. wenn du Bilder in einen Ordner "Hochzeit Lisa" importiert hast.
+  - name: Hochzeit Lisa
+    von: 2026-06-20
+    bis: 2026-06-21
+    schluesselwoerter: [Hochzeit]
+
+  # Automatisch erkannte Reise, die KEIN eigener Ordner werden soll
+  - name: Dienstreise
+    von: 2026-09-02
+    bis: 2026-09-03
+    ignorieren: true

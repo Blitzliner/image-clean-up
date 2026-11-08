@@ -1,0 +1,48 @@
+# fotosort – Konfiguration (zuletzt über die Oberfläche gespeichert).
+# Alle Einstellungen mit Erklärung: src/fotosort/config.py
+
+quellen:
+- C:/Users/manue/Documents/git/analysis/image-clean-up/examples
+ziel: C:/Users/manue/Documents/git/analysis/image-clean-up/test-ziel
+modus: kopieren
+zuhause: auto
+reise:
+  min_entfernung_km: 30
+  max_luecke_tage: 2
+  min_fotos: 15
+  min_vorschlag: 8
+serien:
+  aktion: aussortieren
+  behalten: 1
+favoriten:
+  anteil: 0.15
+  max: 12
+pdf:
+  titel: Jahresrückblick {jahr}
+  untertitel: Unser Jahr in Bildern
+  zoom_staerke: 0.5
+  dpi: 150
+  jpeg_qualitaet: 80
+  min_sterne: 4
+  bild_datum: true
+  max_seiten_pro_ereignis: 2
+  seitenzahlen: true
+  max_beschnitt: 0.15
+  pptx: true
+themen:
+  kinder:
+    seiten: 2
+    aktiv: true
+  freunde:
+    seiten: 2
+    aktiv: true
+  haus:
+    seiten: 2
+    aktiv: true
+    eigenes_pdf: true
+  sonstiges_seiten: 2
+  inhalte_erkennen: true
+aussortieren:
+  staerke: streng
+ordner:
+  alltag: jahr

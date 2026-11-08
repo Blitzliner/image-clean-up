@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fotosort</title>
+<style>
+  :root {
+    --bg: #f5f2ec; --panel: #ffffff; --ink: #24211d; --muted: #77706a; --line: #e5ded3;
+    --accent: #c8792f; --accent-soft: #f6e6d4; --good: #2f8a4e; --good-soft: #dcefe1;
+    --bad: #b2423a; --bad-soft: #f6dedb; --blue-soft: #dfe8f7; --wa-soft: #dcf2df;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: var(--panel);
+           border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; }
+  header h1 { font-size: 19px; margin: 0; letter-spacing: .2px; }
+  header h1 span { color: var(--accent); }
+  nav { display: flex; gap: 4px; margin-left: 24px; }
+  nav button { border: 0; background: none; padding: 8px 14px; border-radius: 8px; font: inherit; color: var(--muted); cursor: pointer; }
+  nav button.aktiv { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+  nav button b { display: inline-block; width: 20px; height: 20px; line-height: 20px; border-radius: 50%; background: var(--line);
+                 color: var(--ink); font-size: 12px; text-align: center; margin-right: 6px; }
+  nav button.aktiv b { background: var(--accent); color: #fff; }
+  #status { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .punkt { width: 9px; height: 9px; border-radius: 50%; background: #b9b2a8; }
+  .punkt.laeuft { background: var(--accent); animation: puls 1s infinite; }
+  .punkt.fehler { background: var(--bad); }
+  @keyframes puls { 50% { opacity: .3; } }
+  main { padding: 24px; max-width: 1400px; margin: 0 auto 160px; }
+  section { display: none; } section.aktiv { display: block; }
+  h2 { margin: 0 0 4px; font-size: 22px; } .unter { color: var(--muted); margin: 0 0 20px; }
+  .karte { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 16px; }
+  .karte h3 { margin: 0 0 12px; font-size: 16px; }
+  .raster { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px 24px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input[type=text], input[type=number], input[type=date], select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; font: inherit; background: #fff; }
+  input:focus, select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .hilfe { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .zeile { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .zeile input { flex: 1; }
+  button.btn { border: 1px solid var(--line); background: #fff; padding: 8px 14px; border-radius: 8px; font: inherit; cursor: pointer; white-space: nowrap; }
+  button.btn:hover { border-color: var(--accent); }
+  button.haupt { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.haupt:hover { filter: brightness(1.05); }
+  button.klein { padding: 4px 9px; font-size: 13px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .aktionen { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .radio { display: flex; gap: 16px; } .radio label { display: flex; align-items: center; gap: 6px; color: var(--ink); font-size: 15px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 6px; border-bottom: 1px solid var(--line); }
+  td { padding: 5px 6px; border-bottom: 1px solid #f0ebe3; vertical-align: middle; }
+  td input { padding: 5px 7px; }
+  .zahl { text-align: right; font-variant-numeric: tabular-nums; }
+  .leer { color: var(--muted); padding: 30px; text-align: center; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; background: var(--line); }
+  .pill.ereignis { background: var(--accent-soft); } .pill.monat { background: #ece8e1; }
+
+  /* Prüfen */
+  .werkzeug { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; position: sticky; top: 58px; z-index: 10;
+              background: var(--bg); padding: 10px 0; }
+  .filter button { border: 1px solid var(--line); background: #fff; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+  .filter button:first-child { border-radius: 8px 0 0 8px; } .filter button:last-child { border-radius: 0 8px 8px 0; }
+  .filter button + button { border-left: 0; } .filter button.aktiv { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .statleiste { color: var(--muted); font-size: 14px; margin-left: auto; }
+  .gruppe { margin-top: 18px; }
+  .gruppe-kopf { display: flex; align-items: baseline; gap: 12px; cursor: pointer; padding: 8px 0; border-bottom: 2px solid var(--line); }
+  .gruppe-kopf h3 { margin: 0; font-size: 18px; } .gruppe-kopf .info { color: var(--muted); font-size: 14px; }
+  .gruppe-kopf .pfeil { color: var(--muted); transition: transform .15s; } .gruppe.zu .pfeil { transform: rotate(-90deg); }
+  .gruppe.zu .bilder { display: none; }
+  .bilder { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; padding-top: 12px; }
+  .bk { background: #fff; border-radius: 8px; overflow: hidden; border: 3px solid #fff; box-shadow: 0 1px 3px #0002; position: relative; }
+  .bk img, .bk .vid { width: 100%; aspect-ratio: 4/3; object-fit: contain; display: block; background: #ebe6de; cursor: zoom-in; }
+  .bk .waehlen { position: absolute; top: 6px; left: 6px; width: 26px; height: 26px; border-radius: 6px; border: 2px solid #fff;
+                 background: #0003; cursor: pointer; box-shadow: 0 1px 3px #0004; }
+  .bk.gewaehlt { border-color: #2f6fd6; } .bk.gewaehlt .waehlen { background: #2f6fd6; }
+  .bk.gewaehlt .waehlen::after { content: "✓"; color: #fff; font-weight: 700; display: block; text-align: center; line-height: 22px; }
+  .badge.rb { background: #f3e3cf; } .badge.rb.leer { background: #f6dedb; }
+  #auswahlleiste { display: none; position: fixed; left: 50%; transform: translateX(-50%); bottom: 46px; z-index: 40;
+                   background: var(--ink); color: #fff; border-radius: 12px; padding: 10px 14px; gap: 10px; align-items: center; box-shadow: 0 4px 16px #0005; }
+  #auswahlleiste.an { display: flex; }
+  #auswahlleiste select { width: 260px; }
+  #auswahlleiste .btn { background: #fff; }
+  .seitenkopf h3 small { color: var(--accent); font-weight: 500; margin-left: 8px; }
+  .chips { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); background: #fff; border-radius: 99px; padding: 0 7px; font-size: 11.5px; cursor: pointer; color: var(--muted); }
+  .chip.an { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+  .personen-raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+  .person { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .person.bekannt { border-color: var(--accent); }
+  .gesichter { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+  .gesichter img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; background: #eee; }
+  .person .zeile select { width: 130px; }
+  .bk .vid { display: flex; align-items: center; justify-content: center; font-size: 30px; color: #8a8178; cursor: default; }
+  .bk.fav { border-color: var(--good); }
+  .bk.aus img { opacity: .4; filter: grayscale(.6); } .bk.aus { background: #faf6f5; }
+  .bk .t { padding: 5px 8px 7px; font-size: 12.5px; }
+  .bk .t .z { font-weight: 600; }
+  .bk .grund { color: var(--bad); font-size: 12px; }
+  .bk .knoepfe { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; }
+  .bk .knoepfe button { width: 30px; height: 30px; border-radius: 50%; border: 0; background: #ffffffe6; cursor: pointer;
+                        font-size: 15px; box-shadow: 0 1px 3px #0003; }
+  .bk .knoepfe button.an { background: #ffd54a; }
+  .bk.aus .knoepfe .loesch { background: var(--bad); color: #fff; }
+  .badge { display: inline-block; padding: 0 5px; border-radius: 4px; background: #eee; font-size: 11.5px; margin-right: 3px; }
+  .q-whatsapp { background: var(--wa-soft); } .q-mann { background: var(--blue-soft); } .q-eigene { background: var(--accent-soft); }
+  .manuell { background: #efe4ff; }
+
+  /* Lightbox */
+  #lightbox { position: fixed; inset: 0; background: #141210f2; z-index: 50; display: none; align-items: center; justify-content: center; flex-direction: column; }
+  #lightbox.offen { display: flex; }
+  #lightbox img { max-width: 92vw; max-height: 80vh; border-radius: 6px; }
+  #lightbox .lb-info { color: #eee; margin-top: 14px; text-align: center; font-size: 15px; }
+  #lightbox .lb-info .grund { color: #ff9c92; }
+  #lightbox .lb-tasten { color: #aaa; font-size: 13px; margin-top: 6px; }
+  #lightbox .lb-knoepfe { display: flex; gap: 10px; margin-top: 10px; }
+  #lightbox .nav { position: absolute; top: 50%; transform: translateY(-50%); background: none; border: 0; color: #fff; font-size: 44px; cursor: pointer; padding: 20px; }
+  #lb-links { left: 10px; } #lb-rechts { right: 10px; } #lb-zu { position: absolute; top: 14px; right: 20px; background: none; border: 0; color: #fff; font-size: 30px; cursor: pointer; }
+
+  /* Protokoll */
+  #protokoll { position: fixed; left: 0; right: 0; bottom: 0; background: #1f1c19; color: #e9e3da; z-index: 30;
+               font: 12.5px/1.5 Consolas, monospace; transition: height .2s; height: 34px; overflow: hidden; }
+  #protokoll.offen { height: 240px; }
+  #protokoll .kopf { display: flex; align-items: center; gap: 10px; padding: 7px 16px; cursor: pointer; font-family: "Segoe UI", sans-serif; font-size: 13px; }
+  #protokoll .kopf .letzte { color: #b6ada2; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; font-family: Consolas, monospace; }
+  #log { padding: 0 16px 10px; height: 200px; overflow: auto; white-space: pre-wrap; }
+  .hinweis { background: var(--accent-soft); border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; }
+  .fehlerbox { background: var(--bad-soft); color: var(--bad); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Foto<span>sort</span></h1>
+  <nav id="nav">
+    <button data-tab="einstellungen" class="aktiv"><b>1</b>Einstellungen</button>
+    <button data-tab="ereignisse"><b>2</b>Ereignisse</button>
+    <button data-tab="personen"><b>3</b>Personen</button>
+    <button data-tab="pruefen"><b>4</b>Bilder prüfen</button>
+    <button data-tab="ablegen"><b>5</b>Ablegen &amp; Rückblick</button>
+  </nav>
+  <div id="status"><span class="punkt" id="punkt"></span><span id="status-text">bereit</span></div>
+</header>
+
+<main>
+  <div class="fehlerbox" id="fehlerbox"></div>
+
+  <!-- 1 EINSTELLUNGEN ----------------------------------------------------->
+  <section id="einstellungen" class="aktiv">
+    <h2>Einstellungen</h2>
+    <p class="unter">Woher kommen die Fotos, wohin sollen sie? Danach auf „Speichern &amp; analysieren“ – dabei wird noch nichts verändert.</p>
+
+    <div class="karte">
+      <h3>Ordner</h3>
+      <label>Quellordner mit unsortierten Fotos (Unterordner werden mit durchsucht)</label>
+      <div id="quellen"></div>
+      <button class="btn klein" onclick="quelleHinzu('')">+ weiterer Ordner</button>
+      <div style="margin-top:16px">
+        <label>Ziel (NAS), z.B. //NAS/Fotos oder Z:/Fotos</label>
+        <div class="zeile"><input type="text" id="ziel"><button class="btn" onclick="waehle('ziel')">Durchsuchen…</button></div>
+      </div>
+      <div style="margin-top:10px">
+        <label>Modus</label>
+        <div class="radio">
+          <label><input type="radio" name="modus" value="kopieren"> kopieren (Originale bleiben – empfohlen)</label>
+          <label><input type="radio" name="modus" value="verschieben"> verschieben</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="karte">
+      <h3>Reisen &amp; Ereignisse erkennen</h3>
+      <div class="raster">
+        <div>
+          <label>Zuhause</label>
+          <div class="radio" style="margin-bottom:6px">
+            <label><input type="radio" name="zuhause_art" value="auto" onchange="zuhauseUmschalten()"> automatisch</label>
+            <label><input type="radio" name="zuhause_art" value="fest" onchange="zuhauseUmschalten()"> fest</label>
+          </div>
+          <div class="zeile" id="zuhause_fest"><input type="number" step="0.001" id="zuhause_lat" placeholder="Breite (lat)"><input type="number" step="0.001" id="zuhause_lon" placeholder="Länge (lon)"></div>
+          <div class="hilfe" id="zuhause_erkannt"></div>
+        </div>
+        <div><label>„Unterwegs“ ab Entfernung (km)</label><input type="number" id="reise.min_entfernung_km"><div class="hilfe">GPS vom Handy deines Mannes</div></div>
+        <div><label>Erlaubte Tage ohne GPS-Foto in einer Reise</label><input type="number" id="reise.max_luecke_tage"></div>
+        <div><label>GPS-Reise automatisch als Ordner ab … Dateien</label><input type="number" id="reise.min_fotos"><div class="hilfe">Darunter nur als Vorschlag</div></div>
+        <div><label>Vorschlagen ab … Dateien</label><input type="number" id="reise.min_vorschlag"><div class="hilfe">Auch Zeiträume mit vielen Fotos ohne GPS</div></div>
+      </div>
+    </div>
+
+    <div class="karte">
+      <h3>Aussortieren &amp; Favoriten</h3>
+      <div class="raster">
+        <div><label>Wie streng aussortieren?</label>
+          <select id="aussortieren.staerke">
+            <option value="mild">mild – nur Duplikate &amp; schnelle Serien</option>
+            <option value="normal">normal</option>
+            <option value="streng">streng – auch ähnliche Motive, Dokumente; ~70 % je Tag</option>
+            <option value="sehr streng">sehr streng – nur die besten ~50 % je Tag</option>
+            <option value="eigene">eigene Werte (config.yaml)</option>
+          </select>
+          <div class="hilfe">Aussortiertes landet nur im Unterordner „Aussortiert“ – nichts wird gelöscht.</div></div>
+        <div><label>Fotos ohne Ereignis</label>
+          <select id="ordner.alltag"><option value="jahr">ein Ordner „Alltag“ pro Jahr</option><option value="monat">ein Ordner pro Monat</option></select></div>
+        <div><label>Serienaufnahmen</label>
+          <select id="serien.aktion"><option value="aussortieren">schwächere aussortieren</option><option value="behalten">alle behalten</option></select></div>
+        <div><label>Beste Bilder je Serie behalten</label><input type="number" min="1" id="serien.behalten"></div>
+        <div><label>Anteil Favoriten je Ordner (0.15 = 15 %)</label><input type="number" step="0.05" min="0" max="1" id="favoriten.anteil"></div>
+        <div><label>Max. Favoriten je Ordner</label><input type="number" id="favoriten.max"></div>
+      </div>
+    </div>
+
+    <div class="karte">
+      <h3>Themen-Ordner</h3>
+      <p class="hilfe" style="margin-top:-6px">Zusätzliche Ordner pro Jahr. Kinder &amp; Freunde werden über die Personen erkannt (Reiter „Personen“),
+        Haus über die Bildinhalte. Bei jedem Bild kannst du das Thema auch per Klick setzen.</p>
+      <div class="raster">
+        <div><label>Bildinhalte erkennen (Haus, Kinder, Dokumente)</label>
+          <select id="themen.inhalte_erkennen"><option value="true">ja (einmalig ~0,6 GB Download)</option><option value="false">nein</option></select></div>
+        <div><label>„Kinder“ (Kopien)</label><select id="themen.kinder.aktiv"><option value="true">an</option><option value="false">aus</option></select></div>
+        <div><label>Seiten „Kinder“ im Rückblick</label><input type="number" min="0" max="6" id="themen.kinder.seiten"></div>
+        <div><label>„Mit Freunden“ (Kopien)</label><select id="themen.freunde.aktiv"><option value="true">an</option><option value="false">aus</option></select></div>
+        <div><label>Seiten „Mit Freunden“ im Rückblick</label><input type="number" min="0" max="6" id="themen.freunde.seiten"></div>
+        <div><label>„Haus &amp; Renovierung“ (eigener Ordner)</label><select id="themen.haus.aktiv"><option value="true">an</option><option value="false">aus</option></select></div>
+        <div><label>Seiten Haus im Jahresrückblick</label><input type="number" min="0" max="6" id="themen.haus.seiten"></div>
+        <div><label>Eigener Haus-Rückblick (PDF/PowerPoint)</label><select id="themen.haus.eigenes_pdf"><option value="true">ja</option><option value="false">nein</option></select></div>
+        <div><label>Seiten „Sonstiges“ am Ende</label><input type="number" min="0" max="6" id="themen.sonstiges_seiten"></div>
+      </div>
+    </div>
+
+    <div class="karte">
+      <h3>Jahresrückblick (PowerPoint &amp; PDF)</h3>
+      <div class="raster">
+        <div><label>Titel ({jahr} wird ersetzt)</label><input type="text" id="pdf.titel"></div>
+        <div><label>Untertitel</label><input type="text" id="pdf.untertitel"></div>
+        <div><label>Leichter Zoom auf Personen (0 = aus, 1 = stark)</label><input type="number" step="0.1" min="0" max="1" id="pdf.zoom_staerke"></div>
+        <div><label>Höchstens abschneiden (0.15 = 15 %)</label><input type="number" step="0.05" min="0" max="0.5" id="pdf.max_beschnitt"><div class="hilfe">0 = Bilder immer vollständig</div></div>
+        <div><label>Zusätzlich PowerPoint (zum Bearbeiten)</label><select id="pdf.pptx"><option value="true">ja</option><option value="false">nein</option></select></div>
+        <div><label>Bilder ab … Sternen</label><input type="number" min="1" max="5" id="pdf.min_sterne"></div>
+        <div><label>Auflösung (dpi) – kleiner = kleinere E-Mail</label><input type="number" id="pdf.dpi"></div>
+        <div><label>JPEG-Qualität (50–95)</label><input type="number" id="pdf.jpeg_qualitaet"></div>
+        <div><label>Max. Seiten pro Ereignis</label><input type="number" min="1" max="10" id="pdf.max_seiten_pro_ereignis"><div class="hilfe">Bei vielen Favoriten, sonst 1 Seite</div></div>
+        <div><label>Seitenzahlen</label><select id="pdf.seitenzahlen"><option value="true">unten mittig</option><option value="false">keine</option></select></div>
+        <div><label>Datum unter jedem Bild</label><select id="pdf.bild_datum"><option value="true">ja</option><option value="false">nein</option></select></div>
+      </div>
+    </div>
+
+    <div class="aktionen">
+      <button class="btn haupt" onclick="speichern(true)">Speichern &amp; analysieren</button>
+      <button class="btn" onclick="speichern(false)">Nur speichern</button>
+      <span class="hilfe" id="config_pfad"></span>
+    </div>
+  </section>
+
+  <!-- 2 EREIGNISSE -------------------------------------------------------->
+  <section id="ereignisse">
+    <h2>Ereignisse</h2>
+    <p class="unter">Prüfe die Vorschläge und gib ihnen Namen. Urlaube und Ausflüge bekommen eigene Ordner (z.B. <i>2026-05_Urlaub_Frankreich</i>). Alles andere landet im Monatsordner.</p>
+    <div class="karte">
+      <h3>Erkannte Reisen &amp; Vorschläge</h3>
+      <p class="hilfe" style="margin-top:-6px"><b>automatisch</b> = wird ohne dein Zutun ein eigener Ordner (GPS-Reise mit vielen Fotos).
+        <b>Vorschlag</b> = wird erst ein Ordner, wenn du ihn übernimmst (kleine Reise oder Zeitraum mit auffällig vielen Fotos).</p>
+      <div id="auto_reisen" class="leer">Noch nicht analysiert.</div>
+    </div>
+    <div class="karte">
+      <h3>Deine Ereignisse</h3>
+      <p class="hilfe" style="margin-top:-6px">Ohne Datum, nur mit Ort: jeder Besuch wird ein eigener Ordner (z.B. Bouldern im Frühjahr und Herbst getrennt).
+        Schlüsselwörter passen auf Datei-/Ordnernamen oder Ortsnamen.<br>
+        <b>im Rückblick</b> abgehakt = Ordner bleibt, aber das Ereignis erscheint nicht im Jahresrückblick.
+        <b>kein Ordner</b> = die Fotos werden trotzdem behalten und sortiert, nur eben im Alltag.</p>
+      <table>
+        <thead><tr><th style="width:22%">Name</th><th>von</th><th>bis</th><th>Ort lat</th><th>lon</th><th>Radius km</th><th>Schlüsselwörter</th><th title="eigener Ordner, aber im Jahresrückblick?">im Rückblick</th><th title="kein eigener Ordner – Fotos kommen in den Alltag">kein Ordner</th><th></th></tr></thead>
+        <tbody id="ereignis_tabelle"></tbody>
+      </table>
+      <div class="aktionen">
+        <button class="btn klein" onclick="ereignisZeile({})">+ Ereignis</button>
+      </div>
+    </div>
+    <div class="aktionen"><button class="btn haupt" onclick="ereignisseSpeichern()">Speichern &amp; neu einteilen</button></div>
+  </section>
+
+  <!-- 3 PERSONEN ---------------------------------------------------------->
+  <section id="personen">
+    <h2>Personen</h2>
+    <p class="unter">Gleiche Gesichter wurden gruppiert. Gib den Gruppen einen Namen und eine Rolle –
+      <b>Kind</b> → Ordner „Kinder“, <b>Freund</b> → Ordner „Mit Freunden“, <b>Familie</b> → nur erkannt,
+      <b>✕ ausblenden</b> → Gruppe ignorieren. Gleicher Name = Gruppen werden zusammengeführt
+      (z.B. für dasselbe Kind in verschiedenen Altersstufen). Kleinkinder sehen sich für die Erkennung oft ähnlich –
+      dann reicht ein gemeinsamer Name wie „Kinder“ mit Rolle Kind.</p>
+    <div class="aktionen" style="margin-bottom:12px"><button class="btn haupt" onclick="personenSpeichern()">Speichern &amp; neu zuordnen</button>
+      <span class="hilfe">Name ist freiwillig – nur eine Rolle reicht („Freund 1“ wird dann automatisch vergeben). Gruppen ohne Rolle werden einfach nicht beachtet.</span>
+      <button class="btn klein" id="ausgeblendet_knopf" onclick="ausgeblendeteUmschalten()" style="display:none"></button>
+      <button class="btn klein" id="kleine_knopf" onclick="zeigeKleine = !zeigeKleine; ladePersonen()" style="display:none"></button></div>
+    <div id="personen_liste" class="leer">Noch nicht analysiert.</div>
+  </section>
+
+  <!-- 4 PRÜFEN ------------------------------------------------------------>
+  <section id="pruefen">
+    <h2>Bilder prüfen</h2>
+    <p class="unter">Chronologisch je Ordner – Bilder vom selben Moment (egal welches Handy) liegen nebeneinander.
+      <b>★</b> = Favorit (kommt in den Rückblick), <b>🗑</b> = aussortieren / zurückholen. Klick aufs Bild = groß ansehen (Tasten: ← → F A Esc).
+      <b>☐</b> oben links = auswählen (Umschalt-Klick für einen Bereich) – dann unten „verschieben nach …“ in ein anderes Ereignis.
+      Ansicht <b>Rückblick</b> zeigt alle Seiten (Ereignisse, Kinder, Freunde, Haus, Sonstiges), wie sie im PDF erscheinen.</p>
+    <div class="werkzeug">
+      <div class="filter" id="filter">
+        <button data-f="alle" class="aktiv">Alle</button>
+        <button data-f="rueckblick" title="So wird der Jahresrückblick aussehen">Rückblick</button>
+        <button data-f="fav">Favoriten</button>
+        <button data-f="aus">Aussortiert</button>
+        <button data-f="aehnlich">Serien &amp; Duplikate</button>
+        <button data-f="kinder">Kinder</button>
+        <button data-f="freunde">Freunde</button>
+        <button data-f="haus">Haus</button>
+      </div>
+      <button class="btn klein" onclick="alleGruppen(true)">alle aufklappen</button>
+      <button class="btn klein" onclick="alleGruppen(false)">alle zuklappen</button>
+      <button class="btn klein" onclick="korrekturenLoeschen()" title="Alle manuellen Änderungen verwerfen">manuelle Änderungen zurücksetzen</button>
+      <span class="statleiste" id="statleiste"></span>
+    </div>
+    <div id="gruppen" class="leer">Noch nicht analysiert – unter „Einstellungen“ auf „Speichern &amp; analysieren“ klicken.</div>
+  </section>
+
+  <!-- 4 ABLEGEN & PDF ----------------------------------------------------->
+  <section id="ablegen">
+    <h2>Ablegen &amp; Jahresrückblick</h2>
+    <p class="unter">Zuerst prüfen, dann ablegen. Es wird nie etwas überschrieben oder gelöscht; bereits abgelegte Dateien werden übersprungen.</p>
+    <div class="karte">
+      <h3>Übersicht</h3>
+      <div id="uebersicht" class="leer">Noch nicht analysiert.</div>
+      <div class="aktionen"><button class="btn haupt" id="btn_ablegen" onclick="ablegen()" disabled>Ablegen</button><span class="hilfe" id="ablegen_info"></span></div>
+    </div>
+    <div class="karte">
+      <h3>Rückblick</h3>
+      <p class="hilfe" style="margin-top:-6px">Erstellt aus den Favoriten (Sterne) im Jahresordner: <b>Jahresrückblick</b> (Ereignisse, Kinder, Mit Freunden,
+        Haus, Sonstiges) und – falls eingeschaltet – den <b>Haus-Rückblick</b>, jeweils als PowerPoint (zum Bearbeiten) und PDF.
+        Sterne kannst du auch im Windows-Explorer ändern und den Rückblick neu erstellen.</p>
+      <div class="zeile" style="max-width:460px"><select id="pdf_jahr"></select><button class="btn haupt" onclick="pdfErstellen()">Rückblick erstellen</button></div>
+      <div id="pdf_liste"></div>
+    </div>
+  </section>
+</main>
+
+<div id="auswahlleiste">
+  <b id="auswahl_anzahl">0</b> ausgewählt · verschieben nach
+  <select id="auswahl_ziel"></select>
+  <button class="btn klein" onclick="auswahlVerschieben()">verschieben</button>
+  <button class="btn klein" onclick="auswahlAlle({ favorit: true, status: 'behalten' })">★ alle</button>
+  <button class="btn klein" onclick="auswahlAlle({ status: 'aussortiert' })">🗑 alle</button>
+  <button class="btn klein" onclick="auswahlLeeren()">Auswahl aufheben</button>
+</div>
+
+<div id="lightbox">
+  <button id="lb-zu" onclick="lbZu()">×</button>
+  <button class="nav" id="lb-links" onclick="lbSchritt(-1)">‹</button>
+  <img id="lb-bild" alt="">
+  <div class="lb-info" id="lb-info"></div>
+  <div class="lb-knoepfe">
+    <button class="btn" id="lb-fav" onclick="lbFav()">★ Favorit</button>
+    <button class="btn" id="lb-aus" onclick="lbAus()">🗑 aussortieren</button>
+  </div>
+  <div class="lb-tasten">← → blättern · F Favorit · A aussortieren/zurückholen · Esc schließen</div>
+  <button class="nav" id="lb-rechts" onclick="lbSchritt(1)">›</button>
+</div>
+
+<div id="protokoll">
+  <div class="kopf" onclick="this.parentElement.classList.toggle('offen')">
+    <b>Protokoll</b><span class="letzte" id="log_letzte"></span><span>▴</span>
+  </div>
+  <div id="log"></div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Hilfsfunktionen
+// ---------------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ART_TEXT = { ereignis: "Ereignis", alltag: "Alltag", monat: "Alltag", haus: "Haus", screenshots: "Screenshots" };
+const QUELLE = { eigene: "Ich", mann: "Mann", whatsapp: "WhatsApp", screenshot: "Screenshot", sonstige: "?" };
+async function api(pfad, daten) {
+  const opt = daten === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(daten) };
+  const r = await fetch(pfad, opt);
+  return r.json();
+}
+function datum(iso) { const d = new Date(iso); return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }); }
+
+// ---------------------------------------------------------------------------
+// Tabs
+// ---------------------------------------------------------------------------
+document.querySelectorAll("#nav button").forEach((b) => b.onclick = () => zeigeTab(b.dataset.tab));
+function zeigeTab(name) {
+  document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("aktiv", b.dataset.tab === name));
+  document.querySelectorAll("section").forEach((s) => s.classList.toggle("aktiv", s.id === name));
+  if (name === "ereignisse") ladeEreignisse();
+  if (name === "ablegen") zeichneUebersicht();
+  if (name === "personen") ladePersonen();
+}
+
+// ---------------------------------------------------------------------------
+// Zustand / Protokoll (regelmäßig abfragen)
+// ---------------------------------------------------------------------------
+let naechsterTab = null, autoOffen = false, zustand = {}, geladeneVersion = -1, configGeladen = false, abfrageTimer = null;
+async function abfragen() {
+  try { zustand = await api("/api/zustand"); } catch (e) { $("status-text").textContent = "keine Verbindung"; setTimeout(abfragen, 3000); return; }
+  const laeuft = !!zustand.auftrag;
+  $("punkt").className = "punkt" + (laeuft ? " laeuft" : zustand.fehler ? " fehler" : "");
+  $("status-text").textContent = laeuft ? zustand.auftrag + " läuft …" : zustand.fehler ? "Fehler" : (zustand.hat_plan ? "bereit · " + zustand.statistik.dateien + " Dateien" : "bereit");
+  $("fehlerbox").style.display = zustand.fehler ? "block" : "none";
+  $("fehlerbox").textContent = zustand.fehler || "";
+  const log = $("log"), unten = log.scrollTop + log.clientHeight >= log.scrollHeight - 10;
+  log.textContent = zustand.log.join("\n");
+  if (unten) log.scrollTop = log.scrollHeight;
+  $("log_letzte").textContent = zustand.log[zustand.log.length - 1] || "";
+  if (laeuft && !$("protokoll").classList.contains("offen")) { $("protokoll").classList.add("offen"); autoOffen = true; }
+  if (!laeuft && autoOffen) { autoOffen = false; setTimeout(() => $("protokoll").classList.remove("offen"), 2500); }
+  document.querySelectorAll("button.haupt").forEach((b) => { if (b.id !== "btn_ablegen") b.disabled = laeuft; });
+  $("btn_ablegen").disabled = laeuft || !zustand.hat_plan;
+  if (!configGeladen) { fuelleConfig(zustand.config); configGeladen = true; $("config_pfad").textContent = "gespeichert in " + zustand.config_pfad; }
+  if (zustand.zuhause) $("zuhause_erkannt").textContent = "erkannt: " + zustand.zuhause.map((x) => x.toFixed(3)).join(", ");
+  fuellePdf();
+  if (!laeuft && zustand.version !== geladeneVersion) { // ein Auftrag ist fertig geworden
+    geladeneVersion = zustand.version;
+    if (zustand.hat_plan) await ladePlan();
+    if (naechsterTab && !zustand.fehler) { zeigeTab(naechsterTab); window.scrollTo(0, 0); }
+    naechsterTab = null;
+    if (document.querySelector("#ereignisse.aktiv")) ladeEreignisse();
+    zeichneUebersicht();
+  }
+  clearTimeout(abfrageTimer);
+  abfrageTimer = setTimeout(abfragen, laeuft ? 800 : 3000);
+}
+
+// ---------------------------------------------------------------------------
+// 1 Einstellungen
+// ---------------------------------------------------------------------------
+function quelleHinzu(wert) {
+  const z = document.createElement("div"); z.className = "zeile";
+  z.innerHTML = `<input type="text" class="quelle" value="${esc(wert)}" placeholder="C:/Users/…/Bilder">
+    <button class="btn" onclick="waehle(this.previousElementSibling)">Durchsuchen…</button>
+    <button class="btn" title="entfernen" onclick="this.parentElement.remove()">✕</button>`;
+  $("quellen").appendChild(z);
+}
+async function waehle(feld) {
+  const el = typeof feld === "string" ? $(feld) : feld;
+  const r = await api("/api/ordner_waehlen", {});
+  if (r.pfad) el.value = r.pfad; else alert("Kein Ordner gewählt (oder der Dialog ist nicht verfügbar – Pfad bitte eintippen).");
+}
+function zuhauseUmschalten() {
+  const fest = document.querySelector("input[name=zuhause_art]:checked")?.value === "fest";
+  $("zuhause_fest").style.display = fest ? "flex" : "none";
+}
+const ZAHLFELDER = ["reise.min_entfernung_km","reise.max_luecke_tage","reise.min_fotos","reise.min_vorschlag","pdf.max_seiten_pro_ereignis","pdf.max_beschnitt","themen.kinder.seiten","themen.freunde.seiten","themen.haus.seiten","themen.sonstiges_seiten","serien.behalten","favoriten.anteil","favoriten.max",
+                    "pdf.zoom_staerke","pdf.dpi","pdf.jpeg_qualitaet","pdf.min_sterne"];
+const TEXTFELDER = ["serien.aktion","pdf.titel","pdf.untertitel","aussortieren.staerke","ordner.alltag"];
+const JANEIN = ["pdf.bild_datum","pdf.seitenzahlen","pdf.pptx","themen.inhalte_erkennen","themen.kinder.aktiv",
+                "themen.freunde.aktiv","themen.haus.aktiv","themen.haus.eigenes_pdf"];
+function fuelleConfig(c) {
+  $("quellen").innerHTML = "";
+  (c.quellen.length ? c.quellen : [""]).forEach(quelleHinzu);
+  $("ziel").value = c.ziel || "";
+  document.querySelectorAll("input[name=modus]").forEach((r) => r.checked = r.value === c.modus);
+  const fest = c.zuhause && typeof c.zuhause === "object";
+  document.querySelectorAll("input[name=zuhause_art]").forEach((r) => r.checked = r.value === (fest ? "fest" : "auto"));
+  if (fest) { $("zuhause_lat").value = c.zuhause.lat; $("zuhause_lon").value = c.zuhause.lon; }
+  zuhauseUmschalten();
+  [...ZAHLFELDER, ...TEXTFELDER].forEach((k) => $(k).value = c[k]);
+  JANEIN.forEach((k) => $(k).value = String(!!c[k]));
+}
+function leseConfig() {
+  const c = {
+    quellen: [...document.querySelectorAll(".quelle")].map((i) => i.value.trim()).filter(Boolean),
+    ziel: $("ziel").value.trim(),
+    modus: document.querySelector("input[name=modus]:checked")?.value || "kopieren",
+  };
+  const fest = document.querySelector("input[name=zuhause_art]:checked")?.value === "fest";
+  c.zuhause = fest && $("zuhause_lat").value ? { lat: +$("zuhause_lat").value, lon: +$("zuhause_lon").value } : "auto";
+  ZAHLFELDER.forEach((k) => c[k] = +$(k).value);
+  TEXTFELDER.forEach((k) => c[k] = $(k).value);
+  JANEIN.forEach((k) => c[k] = $(k).value === "true");
+  return c;
+}
+async function speichern(analysieren) {
+  const c = leseConfig();
+  if (analysieren && (!c.quellen.length || !c.ziel)) { alert("Bitte mindestens einen Quellordner und das Ziel eintragen."); return; }
+  await api("/api/config", c);
+  if (analysieren) { naechsterTab = "ereignisse"; await api("/api/analysieren", {}); abfrageSofort(); }
+  else { $("status-text").textContent = "gespeichert"; }
+}
+function abfrageSofort() { clearTimeout(abfrageTimer); abfrageTimer = setTimeout(abfragen, 300); }
+
+// ---------------------------------------------------------------------------
+// 2 Ereignisse
+// ---------------------------------------------------------------------------
+async function ladeEreignisse() {
+  const d = await api("/api/ereignisse");
+  $("ereignis_tabelle").innerHTML = "";
+  d.eigene.forEach(ereignisZeile);
+  const box = $("auto_reisen");
+  if (!zustand.hat_plan) { box.className = "leer"; box.textContent = "Noch nicht analysiert."; return; }
+  if (!d.auto.length) { box.className = "leer"; box.textContent = "Keine weiteren Reisen erkannt (oder alle bereits übernommen)."; return; }
+  box.className = "";
+  autoListe = d.auto;
+  box.innerHTML = `<table><thead><tr><th>Zeitraum</th><th>Art</th><th>erkannt über</th><th>Ort</th><th class="zahl">Dateien</th><th style="width:30%">Name</th><th></th></tr></thead><tbody>` +
+    d.auto.map((r, i) => `<tr><td>${new Date(r.von).toLocaleDateString("de-DE")}${r.bis !== r.von ? " – " + new Date(r.bis).toLocaleDateString("de-DE") : ""}</td>
+      <td><span class="pill ${r.automatisch ? "ereignis" : ""}">${r.automatisch ? "automatisch" : "Vorschlag"}</span></td>
+      <td>${esc(r.quelle)}</td><td>${esc(r.ort)}</td><td class="zahl">${r.anzahl}</td>
+      <td><input type="text" id="auto_${i}" value="${esc(r.name)}"></td>
+      <td><button class="btn klein" onclick="autoUebernehmen(${i}, false)">übernehmen</button>
+          <button class="btn klein" onclick="autoUebernehmen(${i}, true)">kein Ordner</button></td></tr>`).join("") +
+    `</tbody></table><div class="aktionen"><button class="btn klein" onclick="alleUebernehmen()">alle übernehmen</button>
+     <span class="hilfe">Übernommene stehen unten in „Deine Ereignisse“ (Name/Datum dort änderbar) – danach „Speichern &amp; neu einteilen“.</span></div>`;
+}
+function ereignisZeile(e) {
+  const tr = document.createElement("tr");
+  const ort = e.ort || {};
+  tr.innerHTML = `<td><input type="text" class="e_name" value="${esc(e.name)}"></td>
+    <td><input type="date" class="e_von" value="${esc(e.von || "")}"></td>
+    <td><input type="date" class="e_bis" value="${esc(e.bis || "")}"></td>
+    <td><input type="number" step="0.001" class="e_lat" value="${ort.lat ?? ""}"></td>
+    <td><input type="number" step="0.001" class="e_lon" value="${ort.lon ?? ""}"></td>
+    <td><input type="number" step="0.5" class="e_rad" value="${ort.radius_km ?? ""}"></td>
+    <td><input type="text" class="e_wort" value="${esc((e.schluesselwoerter || []).join(", "))}"></td>
+    <td style="text-align:center"><input type="checkbox" class="e_rb" ${e.im_rueckblick === false ? "" : "checked"}></td>
+    <td style="text-align:center"><input type="checkbox" class="e_ign" ${e.ignorieren ? "checked" : ""}></td>
+    <td><button class="btn klein" onclick="this.closest('tr').remove()">✕</button></td>`;
+  $("ereignis_tabelle").appendChild(tr);
+}
+let autoListe = [];
+function autoUebernehmen(i, ignorieren) {
+  const r = autoListe[i], feld = $("auto_" + i);
+  if (!feld) return;
+  ereignisZeile({ name: feld.value || r.name, von: r.von, bis: r.bis, ignorieren });
+  feld.closest("tr").remove();
+}
+function alleUebernehmen() { autoListe.forEach((_, i) => autoUebernehmen(i, false)); }
+async function ereignisseSpeichern() {
+  const eigene = [...document.querySelectorAll("#ereignis_tabelle tr")].map((tr) => {
+    const q = (k) => tr.querySelector(k).value.trim();
+    const e = { name: q(".e_name"), von: q(".e_von"), bis: q(".e_bis") };
+    if (q(".e_lat") && q(".e_lon")) e.ort = { lat: +q(".e_lat"), lon: +q(".e_lon"), radius_km: +(q(".e_rad") || 5) };
+    const w = q(".e_wort"); if (w) e.schluesselwoerter = w.split(",").map((s) => s.trim()).filter(Boolean);
+    if (tr.querySelector(".e_ign").checked) e.ignorieren = true;
+    if (!tr.querySelector(".e_rb").checked) e.im_rueckblick = false;
+    return e;
+  }).filter((e) => e.name);
+  const ohneAlles = eigene.find((e) => !e.von && !e.ort && !e.schluesselwoerter);
+  if (ohneAlles) { alert(`„${ohneAlles.name}“ braucht ein Datum, einen Ort oder Schlüsselwörter.`); return; }
+  naechsterTab = "personen"; await api("/api/ereignisse", { eigene, neu_planen: true }); abfrageSofort();
+}
+
+// ---------------------------------------------------------------------------
+// Personen
+// ---------------------------------------------------------------------------
+let personenDaten = { personen: [], rollen: [] };
+let zeigeAusgeblendete = false, zeigeKleine = false;
+async function ladePersonen() {
+  personenDaten = await api("/api/personen");
+  const box = $("personen_liste");
+  let sichtbar = personenDaten.personen.map((p, i) => [p, i]).filter(([p]) => !p.ausgeblendet);
+  // Bei sehr vielen Gruppen: kleine Gruppen (2 Fotos) erst auf Wunsch zeigen
+  const kleine = sichtbar.filter(([p]) => !p.bekannt && p.fotos < 3);
+  $("kleine_knopf").style.display = sichtbar.length > 40 && kleine.length ? "" : "none";
+  $("kleine_knopf").textContent = zeigeKleine ? "kleine Gruppen verbergen" : `kleine Gruppen anzeigen (${kleine.length})`;
+  if (sichtbar.length > 40 && !zeigeKleine) sichtbar = sichtbar.filter(([p]) => p.bekannt || p.fotos >= 3);
+  const versteckt = personenDaten.personen.map((p, i) => [p, i]).filter(([p]) => p.ausgeblendet);
+  $("ausgeblendet_knopf").textContent = zeigeAusgeblendete ? "ausgeblendete verbergen" : `ausgeblendete anzeigen (${versteckt.length})`;
+  $("ausgeblendet_knopf").style.display = versteckt.length ? "" : "none";
+  if (!personenDaten.personen.length) { box.className = "leer"; box.textContent = zustand.hat_plan ? "Keine Gesichter gefunden." : "Noch nicht analysiert."; return; }
+  box.className = "personen-raster";
+  const karte = ([p, i]) => `<div class="person ${p.bekannt ? "bekannt" : ""}" ${p.ausgeblendet ? 'style="opacity:.55"' : ""}>
+      <div class="gesichter">${p.beispiele.map(([idx, g]) => `<img loading="lazy" src="/gesicht/${idx}/${g}" title="Klick = Foto ansehen" onclick="lbOeffnen(${idx})">`).join("")}</div>
+      <div class="zeile" style="justify-content:space-between;margin-bottom:6px"><span class="hilfe">${p.fotos} Fotos ${p.ausgeblendet ? "· ausgeblendet" : p.bekannt ? "· gespeichert" : "· unbekannt"}</span>
+        ${p.ausgeblendet ? `<button class="btn klein" onclick="personAktion(${i}, 'einblenden')">wieder einblenden</button>`
+                         : `<button class="btn klein" title="Gruppe ausblenden – wird ignoriert" onclick="personAktion(${i}, 'ausblenden')">✕ ausblenden</button>`}</div>
+      ${p.ausgeblendet ? "" : `<div class="zeile"><input type="text" id="pn_${i}" value="${esc(p.name)}" placeholder="Name (optional)">
+        <select id="pr_${i}"><option value="">Rolle …</option>${personenDaten.rollen.filter((r) => r !== "ignorieren").map((r) => `<option ${r === p.rolle ? "selected" : ""}>${r}</option>`).join("")}</select></div>`}
+    </div>`;
+  box.innerHTML = sichtbar.map(karte).join("") + (zeigeAusgeblendete ? versteckt.map(karte).join("") : "");
+}
+function ausgeblendeteUmschalten() { zeigeAusgeblendete = !zeigeAusgeblendete; ladePersonen(); }
+async function personAktion(i, aktion) {
+  await api("/api/personen", { id: personenDaten.personen[i].id, aktion, neu_planen: true });
+  naechsterTab = "personen"; abfrageSofort();
+}
+async function personenSpeichern() {
+  // Nur Gruppen, bei denen sich Name oder Rolle geändert hat. Ohne Name und
+  // ohne Rolle bleibt eine Gruppe einfach unbeachtet – das ist in Ordnung.
+  const geaendert = personenDaten.personen.map((p, i) => ({ p, i }))
+    .filter(({ p, i }) => !p.ausgeblendet && $("pn_" + i))
+    .map(({ p, i }) => ({ id: p.id, name: $("pn_" + i).value.trim(), rolle: $("pr_" + i).value, alt: p }))
+    .filter((x) => x.name !== x.alt.name || x.rolle !== x.alt.rolle)
+    .map(({ id, name, rolle }) => ({ id, name, rolle }));
+  if (!geaendert.length) { alert("Keine Änderungen."); return; }
+  for (let k = 0; k < geaendert.length; k++)
+    await api("/api/personen", { ...geaendert[k], neu_planen: k === geaendert.length - 1 });
+  naechsterTab = "personen"; abfrageSofort();
+}
+
+// ---------------------------------------------------------------------------
+// 3 Prüfen
+// ---------------------------------------------------------------------------
+let plan = { gruppen: [] }, filter = "alle", zugeklappt = new Set(), sichtbar = [];
+async function ladePlan() { plan = await api("/api/plan"); zeichnePlan(); }
+document.querySelectorAll("#filter button").forEach((b) => b.onclick = () => {
+  filter = b.dataset.f;
+  document.querySelectorAll("#filter button").forEach((x) => x.classList.toggle("aktiv", x === b));
+  zeichnePlan();
+});
+function passtFilter(b) {
+  if (filter === "fav") return b.favorit;
+  if (filter === "aus") return b.status === "aussortiert";
+  if (filter === "aehnlich") return b.serie || /Duplikat/.test(b.grund);
+  if (["kinder", "freunde", "haus"].includes(filter)) return (b.themen || []).includes(filter);
+  return true;
+}
+function karte(b) {
+  const klassen = ["bk", b.favorit ? "fav" : "", b.status === "aussortiert" ? "aus" : "", auswahl.has(b.id) ? "gewaehlt" : ""].join(" ");
+  const bild = b.art === "video" ? `<div class="vid">▶</div>` : `<img loading="lazy" src="/thumb/${b.id}" onclick="lbOeffnen(${b.id})">`;
+  return `<div class="${klassen}" id="k${b.id}" title="${esc(b.pfad)}">${bild}<span class="waehlen" title="auswählen" onclick="waehle_bild(event, ${b.id})"></span>
+    <div class="knoepfe">${b.art === "foto" ? `<button class="${b.favorit ? "an" : ""}" title="Favorit" onclick="setzeFav(${b.id})">★</button>` : ""}
+      <button class="loesch" title="${b.status === "aussortiert" ? "zurückholen" : "aussortieren"}" onclick="setzeAus(${b.id})">${b.status === "aussortiert" ? "↩" : "🗑"}</button></div>
+    <div class="t"><span class="z">${datum(b.zeit)}${b.unsicher ? " ~" : ""}</span>
+      <span class="badge q-${b.quelle}">${QUELLE[b.quelle] || b.quelle}</span>${b.serie ? `<span class="badge">Serie ${b.serie}</span>` : ""}${b.manuell ? `<span class="badge manuell">manuell</span>` : ""}${b.rueckblick ? `<span class="badge rb ${b.rueckblick.startsWith("kein") ? "leer" : ""}" title="Seite im Jahresrückblick">📖 ${esc(b.rueckblick)}</span>` : ""}
+      <br>${esc(b.name.slice(0, 30))} · Note ${b.score ?? "–"}
+      ${b.grund ? `<div class="grund">${esc(b.grund)}</div>` : ""}
+      ${b.art === "foto" ? `<div class="chips">${THEMEN.map(([k, t]) => `<span class="chip ${(b.themen || []).includes(k) ? "an" : ""}" onclick="setzeThema(${b.id}, '${k}')">${t}</span>`).join("")}</div>` : ""}
+      ${(b.personen || []).length ? `<div class="hilfe">👤 ${esc(b.personen.join(", "))}</div>` : ""}</div></div>`;
+}
+const THEMEN = [["kinder", "Kinder"], ["freunde", "Freunde"], ["haus", "Haus"]];
+async function setzeThema(id, thema) {
+  const b = findeBild(id), an = !(b.themen || []).includes(thema);
+  const r = await api("/api/korrektur", { aenderungen: [{ id, themen: { [thema]: an } }] });
+  if (!r.ok) { alert(r.fehler || "Nicht möglich"); return; }
+  const y = window.scrollY;
+  await ladePlan();  // Ordner können sich ändern (Haus)
+  window.scrollTo(0, y);
+}
+let initialZugeklappt = false;
+function zeichneRueckblick() {
+  const ziel = $("gruppen");
+  sichtbar = [];
+  if (!plan.rueckblick.length) { ziel.innerHTML = `<div class="leer">Noch keine Favoriten – ★ bei Bildern setzen.</div>`; return; }
+  ziel.innerHTML = plan.rueckblick.map((s) => {
+    const bilder = s.ids.map(findeBild).filter(Boolean);
+    sichtbar.push(...s.ids);
+    const kopf = s.nr ? `Seite ${s.nr}: ${esc(s.titel)}<small>${esc(s.untertitel)}${s.teil ? " · Teil " + s.teil : ""}</small>`
+                      : `${esc(s.titel)}<small>${esc(s.untertitel)}</small>`;
+    return `<div class="gruppe seitenkopf"><div class="gruppe-kopf"><h3>${kopf}</h3>
+      <span class="info">${s.jahr} · ${bilder.length} Bilder</span></div>
+      <div class="bilder">${bilder.map(karte).join("")}</div></div>`;
+  }).join("") + `<p class="hilfe" style="margin-top:20px">Ändern: ★ entfernen/setzen, Themen-Häkchen (Kinder/Freunde/Haus) oder Bilder in ein anderes Ereignis verschieben.
+    „Sonstiges“ sind Favoriten aus dem Alltag, die zu keinem Thema gehören.</p>`;
+}
+function zeichnePlan() {
+  const ziel = $("gruppen");
+  if (!plan.gruppen.length) return;
+  ziel.className = "";
+  if (filter === "rueckblick") return zeichneRueckblick();
+  // Bei sehr vielen Bildern große Ordner anfangs zugeklappt (schneller)
+  if (!initialZugeklappt) {
+    initialZugeklappt = true;
+    const gesamt = plan.gruppen.reduce((n, g) => n + g.bilder.length, 0);
+    if (gesamt > 600) plan.gruppen.forEach((g) => { if (g.bilder.length > 80) zugeklappt.add(g.jahr + "/" + g.gruppe); });
+  }
+  sichtbar = [];
+  ziel.innerHTML = plan.gruppen.map((g, gi) => {
+    const bilder = g.bilder.filter(passtFilter);
+    if (!bilder.length) return "";
+    sichtbar.push(...bilder.map((b) => b.id));
+    const schluessel = g.jahr + "/" + g.gruppe;
+    return `<div class="gruppe ${zugeklappt.has(schluessel) ? "zu" : ""}" data-k="${esc(schluessel)}">
+      <div class="gruppe-kopf" onclick="klappen(this.parentElement)"><span class="pfeil">▾</span><h3>${esc(g.name)}</h3>
+        <span class="pill ${g.art}">${ART_TEXT[g.art] || g.art}</span>
+        <span class="info" id="info${gi}">${kopfInfo(g)}</span></div>
+      <div class="bilder">${zugeklappt.has(schluessel) ? "" : bilder.map(karte).join("")}</div></div>`;
+  }).join("") || `<div class="leer">Keine Bilder für diesen Filter.</div>`;
+  const s = plan.statistik;
+  $("statleiste").textContent = `${s.dateien} Dateien · ${s.behalten} behalten · ${s.favoriten} Favoriten`;
+}
+function kopfInfo(g) {
+  const fav = g.bilder.filter((b) => b.favorit).length, aus = g.bilder.filter((b) => b.status === "aussortiert").length;
+  return `${g.jahr}/${esc(g.gruppe)} · ${g.bilder.length} Dateien · ${fav} ★ · ${aus} aussortiert`;
+}
+function klappen(el) {
+  const k = el.dataset.k; if (!k) return;
+  const warZu = zugeklappt.has(k);
+  warZu ? zugeklappt.delete(k) : zugeklappt.add(k);
+  if (warZu) { const y = window.scrollY; zeichnePlan(); window.scrollTo(0, y); } else el.classList.add("zu");
+}
+function alleGruppen(auf) {
+  plan.gruppen.forEach((g) => { const k = g.jahr + "/" + g.gruppe; auf ? zugeklappt.delete(k) : zugeklappt.add(k); });
+  zeichnePlan();
+}
+
+// ---- Auswahl & Verschieben ----
+let auswahl = new Set(), letzteWahl = null;
+function waehle_bild(ev, id) {
+  ev.stopPropagation();
+  if (ev.shiftKey && letzteWahl !== null) {
+    const a = sichtbar.indexOf(letzteWahl), b = sichtbar.indexOf(id);
+    if (a >= 0 && b >= 0) sichtbar.slice(Math.min(a, b), Math.max(a, b) + 1).forEach((x) => auswahl.add(x));
+  } else auswahl.has(id) ? auswahl.delete(id) : auswahl.add(id);
+  letzteWahl = id;
+  aktualisiereAuswahl();
+}
+function aktualisiereAuswahl() {
+  document.querySelectorAll(".bk").forEach((k) => k.classList.toggle("gewaehlt", auswahl.has(+k.id.slice(1))));
+  $("auswahlleiste").classList.toggle("an", auswahl.size > 0);
+  $("auswahl_anzahl").textContent = auswahl.size;
+  const sel = $("auswahl_ziel"), alt = sel.value;
+  sel.innerHTML = `<option value="__alltag">Alltag (kein Ereignis)</option>` +
+    (plan.ereignisse || []).map((e) => `<option value="${esc(e)}">${esc(e)}</option>`).join("") +
+    `<option value="__neu">+ neues Ereignis …</option>`;
+  if ([...sel.options].some((o) => o.value === alt)) sel.value = alt;
+}
+function auswahlLeeren() { auswahl.clear(); aktualisiereAuswahl(); }
+async function auswahlVerschieben() {
+  let ziel = $("auswahl_ziel").value;
+  if (ziel === "__neu") { ziel = prompt("Name des neuen Ereignisses (z.B. „Geburtstag Oma“):"); if (!ziel) return; }
+  const r = await api("/api/verschieben", { ids: [...auswahl], ereignis: ziel === "__alltag" ? null : ziel });
+  if (!r.ok) { alert(r.fehler || "Nicht möglich"); return; }
+  auswahl.clear(); aktualisiereAuswahl();
+  const y = window.scrollY; await ladePlan(); window.scrollTo(0, y);
+}
+async function auswahlAlle(aenderung) {
+  const r = await api("/api/korrektur", { aenderungen: [...auswahl].map((id) => ({ id, ...aenderung })) });
+  if (!r.ok) { alert(r.fehler || "Nicht möglich"); return; }
+  auswahl.clear(); aktualisiereAuswahl();
+  const y = window.scrollY; await ladePlan(); window.scrollTo(0, y);
+}
+function findeBild(id) { for (const g of plan.gruppen) for (const b of g.bilder) if (b.id === id) return b; }
+async function aendern(id, aenderung) {
+  const r = await api("/api/korrektur", { aenderungen: [{ id, ...aenderung }] });
+  if (!r.ok) { alert(r.fehler || "Nicht möglich"); return; }
+  const b = findeBild(id);
+  Object.assign(b, aenderung, { manuell: true });
+  if (aenderung.status) b.grund = aenderung.status === "aussortiert" ? "manuell aussortiert" : "manuell behalten";
+  if (b.status === "aussortiert") b.favorit = false;
+  plan.statistik = r.statistik;
+  const alt = $("k" + id);
+  if (alt) { const neu = document.createElement("div"); neu.innerHTML = karte(b); alt.replaceWith(neu.firstElementChild); }
+  $("statleiste").textContent = `${r.statistik.dateien} Dateien · ${r.statistik.behalten} behalten · ${r.statistik.favoriten} Favoriten`;
+  plan.gruppen.forEach((g, gi) => { if (g.bilder.includes(b) && $("info" + gi)) $("info" + gi).innerHTML = kopfInfo(g); });
+  // Rückblick-Seiten können sich verschieben -> nur geänderte Abzeichen neu zeichnen
+  if (r.rueckblick) {
+    plan.rueckblick = r.rueckblick;
+    const abz = {};
+    r.rueckblick.forEach((s) => s.ids.forEach((i) => abz[i] = s.nr ? `S. ${s.nr} · ${s.titel}` : "kein Platz im Rückblick"));
+    plan.gruppen.forEach((g) => g.bilder.forEach((x) => {
+      const neu = abz[x.id] || "";
+      if (neu !== (x.rueckblick || "")) {
+        x.rueckblick = neu;
+        const k = $("k" + x.id);
+        if (k && filter !== "rueckblick") { const d = document.createElement("div"); d.innerHTML = karte(x); k.replaceWith(d.firstElementChild); }
+      }
+    }));
+    if (filter === "rueckblick") { const y = window.scrollY; zeichneRueckblick(); window.scrollTo(0, y); }
+  }
+  if (lbId === id) lbZeigen();
+}
+function setzeFav(id) { const b = findeBild(id); const an = !b.favorit; return aendern(id, an ? { favorit: true, status: "behalten" } : { favorit: false }); }
+function setzeAus(id) { const b = findeBild(id); return aendern(id, { status: b.status === "aussortiert" ? "behalten" : "aussortiert" }); }
+async function korrekturenLoeschen() {
+  if (!confirm("Alle manuellen Änderungen (Sterne/Aussortieren) verwerfen und neu einteilen?")) return;
+  await api("/api/korrekturen_loeschen", {}); abfrageSofort();
+}
+
+// Lightbox
+let lbId = null;
+function lbOeffnen(id) { lbId = id; $("lightbox").classList.add("offen"); lbZeigen(); }
+function lbZu() { $("lightbox").classList.remove("offen"); lbId = null; }
+function lbZeigen() {
+  const b = findeBild(lbId);
+  $("lb-bild").src = "/bild/" + lbId;
+  $("lb-info").innerHTML = `<b>${datum(b.zeit)}</b> · ${QUELLE[b.quelle]} · ${esc(b.name)} · Note ${b.score ?? "–"} · ${b.gesichter} Gesicht(er)
+    ${b.favorit ? " · <b style='color:#ffd54a'>★ Favorit</b>" : ""}${b.grund ? `<div class="grund">${esc(b.grund)}</div>` : ""}`;
+  $("lb-fav").textContent = b.favorit ? "★ Favorit entfernen" : "★ Favorit";
+  $("lb-aus").textContent = b.status === "aussortiert" ? "↩ zurückholen" : "🗑 aussortieren";
+}
+function lbSchritt(d) {
+  const fotos = (sichtbar.includes(lbId) ? sichtbar : plan.gruppen.flatMap((g) => g.bilder.map((b) => b.id)))
+    .filter((id) => findeBild(id).art !== "video");
+  const i = fotos.indexOf(lbId);
+  if (i + d >= 0 && i + d < fotos.length) { lbId = fotos[i + d]; lbZeigen(); }
+}
+function lbFav() { setzeFav(lbId); } function lbAus() { setzeAus(lbId); }
+document.addEventListener("keydown", (e) => {
+  if (lbId === null) return;
+  if (e.key === "Escape") lbZu(); else if (e.key === "ArrowLeft") lbSchritt(-1); else if (e.key === "ArrowRight") lbSchritt(1);
+  else if (e.key.toLowerCase() === "f") lbFav(); else if (e.key.toLowerCase() === "a") lbAus();
+});
+
+// ---------------------------------------------------------------------------
+// 4 Ablegen & PDF
+// ---------------------------------------------------------------------------
+function zeichneUebersicht() {
+  if (!plan.gruppen.length) return;
+  const s = plan.statistik, c = zustand.config || {};
+  let summe = { n: 0, b: 0, f: 0, a: 0 };
+  const zeilen = plan.gruppen.map((g) => {
+    const n = g.bilder.length, f = g.bilder.filter((b) => b.favorit).length, a = g.bilder.filter((b) => b.status === "aussortiert").length;
+    summe.n += n; summe.f += f; summe.a += a; summe.b += n - a;
+    return `<tr><td>${g.jahr}/${esc(g.gruppe)}</td><td><span class="pill ${g.art}">${ART_TEXT[g.art] || g.art}</span></td><td class="zahl">${n}</td><td class="zahl">${n - a}</td><td class="zahl">${f}</td><td class="zahl">${a}</td></tr>`;
+  }).join("");
+  $("uebersicht").className = "";
+  $("uebersicht").innerHTML = `<table><thead><tr><th>Ordner</th><th></th><th class="zahl">Dateien</th><th class="zahl">behalten</th><th class="zahl">★</th><th class="zahl">aussortiert</th></tr></thead>
+    <tbody>${zeilen}<tr><td><b>Summe</b></td><td></td><td class="zahl"><b>${summe.n}</b></td><td class="zahl"><b>${summe.b}</b></td><td class="zahl"><b>${summe.f}</b></td><td class="zahl"><b>${summe.a}</b></td></tr></tbody></table>`;
+  const verb = c.modus === "verschieben" ? "verschieben" : "kopieren";
+  $("btn_ablegen").textContent = `${summe.n} Dateien nach ${c.ziel} ${verb}`;
+  $("ablegen_info").textContent = c.modus === "verschieben" ? "Achtung: Originale werden nach dem Kopieren entfernt." : "Originale bleiben erhalten.";
+}
+async function ablegen() {
+  const c = zustand.config;
+  const verb = c.modus === "verschieben" ? "VERSCHIEBEN" : "kopieren";
+  if (!confirm(`Jetzt alle Dateien nach ${c.ziel} ${verb}?`)) return;
+  await api("/api/sortieren", {}); abfrageSofort();
+}
+function fuellePdf() {
+  const sel = $("pdf_jahr"), jahre = zustand.jahre.length ? zustand.jahre : [new Date().getFullYear()];
+  if (sel.options.length !== jahre.length) sel.innerHTML = jahre.map((j) => `<option ${j === jahre[jahre.length - 1] ? "selected" : ""}>${j}</option>`).join("");
+  $("pdf_liste").innerHTML = zustand.pdfs.map((p, i) => `<div class="zeile" style="margin-top:10px">${p.endsWith(".pptx") ? "📊" : "📄"}
+    <a href="/datei?nr=${i}" ${p.endsWith(".pdf") ? 'target="_blank"' : ""}>${esc(p)}</a>
+    <span class="hilfe">${p.endsWith(".pptx") ? "PowerPoint – herunterladen oder direkt im Ordner öffnen" : "PDF ansehen"}</span></div>`).join("");
+}
+async function pdfErstellen() { await api("/api/pdf", { jahr: +$("pdf_jahr").value }); abfrageSofort(); }
+
+// Start
+abfragen();
+</script>
+</body>
+</html>
