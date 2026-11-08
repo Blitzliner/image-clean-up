@@ -509,6 +509,12 @@ def starte_ui(config_pfad: str = "config.yaml", port: int = 8765) -> None:
     warnings.showwarning = warnung_ins_protokoll
     # Meldet im Protokoll, wo das Programm steckt, wenn ein Schritt lange still ist
     fortschritt.starte_wachhund(lambda text: z.log.append(text))
+    # Harte Abstürze in eine Datei schreiben; einen früheren Absturz anzeigen
+    frueher = fortschritt.absturzprotokoll(z.cfg["_basis"])
+    if frueher:
+        z.log.append("Hinweis: Beim letzten Mal ist das Programm abgestürzt "
+                     "(Details: fotosort_absturz.log):")
+        z.log.extend("  " + zeile for zeile in frueher.splitlines()[:12])
     server = ThreadingHTTPServer(("127.0.0.1", port), baue_handler(z))
     adresse = f"http://127.0.0.1:{port}/"
     print(f"Oberfläche läuft auf {adresse}  (Beenden: Strg+C)")

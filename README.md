@@ -174,6 +174,15 @@ einem Lauf sind kein Problem – jedes Jahr bekommt seinen Ordner und Rückblick
   werden. Gibt ein Schritt länger als 1 Minute keine Meldung, schreibt der „Wachhund“ ins
   Protokoll, an welcher Stelle im Code das Programm gerade arbeitet (hilfreich bei Hängern).
 - Dateien, die beim letzten Lauf nicht lesbar waren, werden beim nächsten Lauf neu versucht.
+- Die Inhaltserkennung (CLIP/onnxruntime) läuft in einem **eigenen Prozess**. Stürzt sie ab
+  (unter Windows z.B. bei fehlender „Microsoft Visual C++ Redistributable“), macht das Programm
+  mit Schritt 3 weiter und erklärt im Protokoll, was passiert ist. Erneuter Versuch: Datei
+  `models/clip/.nicht_verfuegbar` löschen (sonst automatisch nach einem Tag).
+  VC++-Runtime: https://aka.ms/vs/17/release/vc_redist.x64.exe
+- Harte Abstürze werden in `fotosort_absturz.log` (Hauptprogramm) bzw.
+  `fotosort_absturz_inhalt.log` (Inhaltserkennung) protokolliert; beim nächsten Start steht ein
+  Hinweis im Protokoll. Normale Fehler (Exceptions) beenden das Programm nie – sie erscheinen
+  als rote Meldung in der Oberfläche, die weiter bedienbar bleibt.
 
 **Große Fotos beim Ablegen verkleinern** (Einstellungen → Ordner): Fotos über z.B. 24 MP
 (≈ 6000 × 4000) werden beim Kopieren aufs NAS verkleinert und mit JPEG-Qualität 90 gespeichert;

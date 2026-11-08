@@ -415,7 +415,15 @@ function zeigeTab(name) {
 // ---------------------------------------------------------------------------
 let naechsterTab = null, autoOffen = false, zustand = {}, geladeneVersion = -1, configGeladen = false, abfrageTimer = null;
 async function abfragen() {
-  try { zustand = await api("/api/zustand"); } catch (e) { $("status-text").textContent = "keine Verbindung"; setTimeout(abfragen, 3000); return; }
+  try { zustand = await api("/api/zustand"); } catch (e) {
+    $("status-text").textContent = "keine Verbindung";
+    $("punkt").className = "punkt fehler";
+    $("fehlerbox").style.display = "block";
+    $("fehlerbox").innerHTML = "<b>Keine Verbindung zum Programm.</b> Ist das Konsolenfenster mit <code>uv run fotosort ui</code> noch offen? " +
+      "Falls es sich beendet hat, bitte neu starten – alles bisher Eingelesene ist gespeichert und wird übernommen. " +
+      "Beim Neustart steht im Protokoll, falls es einen Absturz gab (Details in <code>fotosort_absturz.log</code>).";
+    clearTimeout(abfrageTimer); abfrageTimer = setTimeout(abfragen, 3000); return;
+  }
   const laeuft = !!zustand.auftrag;
   $("punkt").className = "punkt" + (laeuft ? " laeuft" : zustand.fehler ? " fehler" : "");
   const f = zustand.fortschritt || {};

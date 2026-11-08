@@ -154,6 +154,32 @@ def _code_stelle(thread_id: int) -> str:
     return " → ".join(teile)
 
 
+_absturz_datei = []
+
+
+def absturzprotokoll(ordner, name: str = "fotosort_absturz.log") -> str:
+    """
+    Bei einem harten Absturz (z.B. in einer C-Bibliothek) schreibt Python den
+    Aufrufstapel in diese Datei. Gibt den Inhalt eines früheren Absturzes zurück.
+    """
+    import faulthandler
+    from pathlib import Path
+
+    pfad = Path(ordner) / name
+    frueher = ""
+    try:
+        if pfad.exists():
+            text = pfad.read_text(encoding="utf-8", errors="replace").strip()
+            if "Fatal" in text or "exception" in text:
+                frueher = text
+        datei = open(pfad, "w", encoding="utf-8")
+        _absturz_datei.append(datei)  # offen halten
+        faulthandler.enable(datei, all_threads=True)
+    except OSError:
+        pass
+    return frueher
+
+
 def starte_wachhund(ausgabe=print, still_sekunden: int = 60) -> None:
     """
     Hintergrund-Thread: Läuft ein Schritt und kam länger als `still_sekunden`

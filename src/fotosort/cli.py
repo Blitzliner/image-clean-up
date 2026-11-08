@@ -25,7 +25,7 @@ from . import duplikate, ereignisse, inhalt, personen, planung, themen
 from .ablage import ablegen
 from .analyse import analysiere_alle
 from .config import lade_config
-from .fortschritt import Schritt, starte_wachhund
+from .fortschritt import Schritt, absturzprotokoll, starte_wachhund
 from .jahresrueckblick import erstelle_rueckblicke
 from .vorschau import erstelle_vorschau
 
@@ -105,6 +105,10 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     starte_wachhund()
+    frueher = absturzprotokoll(Path(args.config).resolve().parent)
+    if frueher:
+        print("Hinweis: Beim letzten Lauf ist das Programm abgestürzt:\n  "
+              + "\n  ".join(frueher.splitlines()[:12]))
     cfg = lade_config(args.config)
     if not Path(args.config).exists():
         print(f"Hinweis: {args.config} nicht gefunden – es gelten die Standardwerte.")
