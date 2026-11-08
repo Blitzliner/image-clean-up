@@ -57,6 +57,15 @@ STANDARD: dict = {
                  "eigenes_pdf": True, "max_bilder_pdf": 150},
         "sonstiges_seiten": 2,  # übrige Favoriten am Ende des Jahresrückblicks
     },
+    # Beim Ablegen auf das NAS sehr große Fotos verkleinern/komprimieren.
+    # Nur Fotos über max_megapixel werden verändert, kleinere 1:1 kopiert.
+    # EXIF (Datum, GPS, Kamera) bleibt erhalten. Die Originale in den
+    # Quellordnern bleiben bei "kopieren" unverändert.
+    "ablage": {
+        "verkleinern": False,
+        "max_megapixel": 24,  # z.B. 24 MP = ca. 6000 x 4000 Pixel
+        "jpeg_qualitaet": 90,  # 85-92 = kaum sichtbarer Unterschied
+    },
     # Wohnort: "auto" (häufigster GPS-Ort) oder {lat: 50.1, lon: 7.5}
     "zuhause": "auto",
     # Automatische Reise-/Ausflugserkennung über GPS

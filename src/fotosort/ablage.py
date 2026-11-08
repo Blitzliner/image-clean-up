@@ -36,6 +36,50 @@ def _kopiere(quelle: Path, ziel: Path, versuche: int = 3) -> None:
             time.sleep(2 * versuch)
 
 
+VERKLEINERBAR = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def verkleinert_ablegen(quelle: Path, ziel: Path, cfg: dict) -> bool:
+    """
+    Großes Foto verkleinert/komprimiert ablegen. Gibt False zurück, wenn das
+    Foto klein genug ist (dann normal kopieren). EXIF + Farbprofil bleiben erhalten.
+    Hinweis: Bei Pixel-"Motion Photos" geht das eingebettete Kurzvideo verloren.
+    """
+    ac = cfg["ablage"]
+    if not ac.get("verkleinern") or quelle.suffix.lower() not in VERKLEINERBAR:
+        return False
+    from PIL import Image
+
+    grenze = ac["max_megapixel"] * 1_000_000
+    with Image.open(quelle) as im:
+        breite, hoehe = im.size
+        if breite * hoehe <= grenze:
+            return False
+        f = (grenze / (breite * hoehe)) ** 0.5
+        neu = (max(1, int(breite * f)), max(1, int(hoehe * f)))
+        exif = im.info.get("exif")
+        icc = im.info.get("icc_profile")
+        im.draft("RGB", neu)  # JPEG direkt verkleinert dekodieren (schnell, wenig Speicher)
+        if im.mode not in ("RGB", "L", "RGBA"):
+            im = im.convert("RGB")
+        klein = im.resize(neu, Image.LANCZOS)
+    tmp = ziel.with_name(ziel.name + ".tmp")
+    optionen = {"optimize": True}
+    if exif:
+        optionen["exif"] = exif
+    if icc:
+        optionen["icc_profile"] = icc
+    endung = quelle.suffix.lower()
+    if endung in (".jpg", ".jpeg"):
+        klein.save(tmp, "JPEG", quality=ac["jpeg_qualitaet"], **optionen)
+    elif endung == ".webp":
+        klein.save(tmp, "WEBP", quality=ac["jpeg_qualitaet"], **optionen)
+    else:
+        klein.save(tmp, "PNG", **optionen)
+    os.replace(tmp, ziel)
+    return True
+
+
 def pruefe_speicherplatz(items: list[dict], cfg: dict) -> bool:
     """Reicht der Platz im Ziel? Gibt False (mit Meldung) zurück, wenn nicht."""
     ziel = Path(cfg["ziel"])
@@ -48,9 +92,12 @@ def pruefe_speicherplatz(items: list[dict], cfg: dict) -> bool:
         print(f"Hinweis: Speicherplatz von {ziel} konnte nicht geprüft werden.")
         return True
     benoetigt = 0
+    ac = cfg["ablage"]
     for i in items:
         if not Path(i["ziel"]).exists():
             groesse = i.get("groesse", 0)
+            if ac.get("verkleinern") and i.get("breite", 0) * i.get("hoehe", 0) > ac["max_megapixel"] * 1e6:
+                groesse = min(groesse, int(ac["max_megapixel"] * 1e6 * 0.5))  # grobe Schätzung
             benoetigt += groesse * (1 + len(i.get("kopien", [])))
     gb = lambda b: f"{b / 1e9:.1f} GB".replace(".", ",")
     print(f"Speicherplatz: benötigt ca. {gb(benoetigt)}, frei {gb(frei)}.")
@@ -104,8 +151,15 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
     """Alle Dateien laut Plan ablegen. Gibt eine Statistik zurück."""
     verschieben = cfg["modus"] == "verschieben"
     statistik = {"kopiert": 0, "verschoben": 0, "uebersprungen": 0, "fehler": 0, "sterne": 0,
-                 "themen_kopien": 0}
+                 "themen_kopien": 0, "verkleinert": 0}
     pro_jahr: dict[Path, list[dict]] = {}
+    # Was wurde früher schon abgelegt? (wichtig für verkleinerte Dateien, deren
+    # Größe nicht mehr zum Original passt)
+    frueher: dict[str, str] = {}
+    for jahr in {i["jahr"] for i in items}:
+        for zeile in lese_protokoll(Path(cfg["ziel"]) / str(jahr) / PROTOKOLL_NAME).values():
+            frueher[zeile["ziel"]] = zeile.get("original", "")
+    gespart = 0
     if not pruefe_speicherplatz(items, cfg):
         statistik["fehler"] = len(items)
         return statistik
@@ -119,6 +173,8 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
                 # schon bei einem früheren Lauf verschoben
                 statistik["uebersprungen"] += 1
             elif _gleiche_datei(quelle, ziel) or (
+                ziel.exists() and frueher.get(str(ziel)) == str(quelle)
+            ) or (
                 i.get("favorit") and ziel.exists()
                 and abs(ziel.stat().st_size - quelle.stat().st_size) < 4096
             ):
@@ -134,7 +190,11 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
                         n += 1
                     ziel = k
                     i["ziel"] = str(ziel)
-                _kopiere(quelle, ziel)
+                if verkleinert_ablegen(quelle, ziel, cfg):
+                    statistik["verkleinert"] += 1
+                    gespart += quelle.stat().st_size - ziel.stat().st_size
+                else:
+                    _kopiere(quelle, ziel)
                 if i.get("favorit") and schreibe_sterne(ziel, 5):
                     statistik["sterne"] += 1
                 if cfg["dateizeit_setzen"]:
@@ -171,6 +231,9 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
         if nr % 1000 == 0:
             _schreibe_protokolle(pro_jahr)
     fortschritt.fertig()
+    if statistik["verkleinert"]:
+        menge = f"{gespart / 1e9:.1f} GB" if gespart >= 1e9 else f"{gespart / 1e6:.0f} MB"
+        print(f"  {statistik['verkleinert']} große Fotos verkleinert – {menge.replace('.', ',')} gespart.")
     _schreibe_protokolle(pro_jahr)
     if fehlerliste:
         datei = Path(cfg["_basis"]) / "ablage_fehler.txt"

@@ -170,6 +170,16 @@ einem Lauf sind kein Problem – jedes Jahr bekommt seinen Ordner und Rückblick
   bis zu 3× wiederholt, Fehler landen in `ablage_fehler.txt`.
 - In der Oberfläche sind große Ordner anfangs zugeklappt und zeigen je 300 Bilder
   („weitere anzeigen“).
+- Die Analyse läuft in 7 Schritten, die im Kopf der Oberfläche und in der Konsole angezeigt
+  werden. Gibt ein Schritt länger als 1 Minute keine Meldung, schreibt der „Wachhund“ ins
+  Protokoll, an welcher Stelle im Code das Programm gerade arbeitet (hilfreich bei Hängern).
+- Dateien, die beim letzten Lauf nicht lesbar waren, werden beim nächsten Lauf neu versucht.
+
+**Große Fotos beim Ablegen verkleinern** (Einstellungen → Ordner): Fotos über z.B. 24 MP
+(≈ 6000 × 4000) werden beim Kopieren aufs NAS verkleinert und mit JPEG-Qualität 90 gespeichert;
+Datum, GPS und Kameradaten bleiben erhalten, kleinere Fotos werden 1:1 kopiert. Die Originale
+in den Quellordnern bleiben (Modus „kopieren“) unverändert. Hinweis: Bei Pixel-„Motion Photos“
+geht beim Verkleinern das eingebettete Kurzvideo verloren.
 
 ## Hinweise
 

@@ -122,6 +122,7 @@ UI_FELDER = [
     "themen.inhalte_erkennen", "themen.kinder.aktiv", "themen.kinder.seiten",
     "themen.freunde.aktiv", "themen.freunde.seiten", "themen.haus.aktiv", "themen.haus.seiten",
     "themen.haus.eigenes_pdf", "themen.sonstiges_seiten", "pdf.max_beschnitt", "pdf.pptx",
+    "ablage.verkleinern", "ablage.max_megapixel", "ablage.jpeg_qualitaet", "analyse.max_megapixel",
     "reise.min_entfernung_km", "reise.max_luecke_tage", "reise.min_fotos", "reise.min_vorschlag",
     "serien.aktion", "serien.behalten", "favoriten.anteil", "favoriten.max",
     "pdf.titel", "pdf.untertitel", "pdf.zoom_staerke", "pdf.dpi", "pdf.jpeg_qualitaet",
@@ -334,7 +335,7 @@ def baue_handler(z: Zustand):
             if url.path == "/api/zustand":
                 return self._json({
                     "auftrag": z.auftrag, "fehler": z.fehler, "version": z.version,
-                    "fortschritt": fortschritt.stand(), "log": list(z.log)[-150:],
+                    "fortschritt": fortschritt.stand(), "schritt": fortschritt.aktueller_schritt(), "log": list(z.log)[-150:],
                     "hat_plan": bool(z.items), "statistik": z.statistik,
                     "config": config_fuer_ui(z.cfg), "config_pfad": str(z.config_pfad),
                     "jahre": sorted({i["jahr"] for i in z.items}), "pdfs": z.pdfs,
@@ -506,6 +507,8 @@ def starte_ui(config_pfad: str = "config.yaml", port: int = 8765) -> None:
             z.log.append(text)
         print(text)
     warnings.showwarning = warnung_ins_protokoll
+    # Meldet im Protokoll, wo das Programm steckt, wenn ein Schritt lange still ist
+    fortschritt.starte_wachhund(lambda text: z.log.append(text))
     server = ThreadingHTTPServer(("127.0.0.1", port), baue_handler(z))
     adresse = f"http://127.0.0.1:{port}/"
     print(f"Oberfläche läuft auf {adresse}  (Beenden: Strg+C)")

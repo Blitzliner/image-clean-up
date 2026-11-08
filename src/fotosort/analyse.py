@@ -294,10 +294,12 @@ def analysiere_alle(cfg: dict) -> list[dict]:
         k = _cache_schluessel(p)
         if k is None:
             continue
-        if k in cache:
-            if cache[k] is not None:
-                ergebnisse.append(cache[k])
+        eintrag = cache.get(k)
+        if k in cache and not (eintrag and eintrag.get("fehler")):
+            if eintrag is not None:
+                ergebnisse.append(eintrag)
         else:
+            # neu – oder beim letzten Mal fehlgeschlagen (z.B. alte Größengrenze): neu versuchen
             offen.append((k, p))
 
     if offen:

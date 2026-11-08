@@ -162,6 +162,17 @@
         <label>Ziel (NAS), z.B. //NAS/Fotos oder Z:/Fotos</label>
         <div class="zeile"><input type="text" id="ziel"><button class="btn" onclick="waehle('ziel')">Durchsuchen…</button></div>
       </div>
+      <div class="raster" style="margin-top:14px">
+        <div><label>Große Fotos beim Ablegen verkleinern</label>
+          <select id="ablage.verkleinern"><option value="false">nein – Originale 1:1</option><option value="true">ja – Platz sparen</option></select>
+          <div class="hilfe">Nur Fotos über der Grenze; Datum, GPS &amp; Kameradaten bleiben erhalten.</div></div>
+        <div><label>… ab wie vielen Megapixeln</label><input type="number" min="4" max="200" id="ablage.max_megapixel">
+          <div class="hilfe">24 MP ≈ 6000 × 4000 Pixel (mehr als genug für Fotobuch &amp; Bildschirm)</div></div>
+        <div><label>JPEG-Qualität beim Verkleinern</label><input type="number" min="60" max="98" id="ablage.jpeg_qualitaet">
+          <div class="hilfe">85–92 = kaum sichtbarer Unterschied</div></div>
+        <div><label>Größte Bildgröße beim Einlesen (MP)</label><input type="number" min="100" max="2000" id="analyse.max_megapixel">
+          <div class="hilfe">Schutz vor kaputten Riesendateien; Panoramas haben 100–300 MP</div></div>
+      </div>
       <div style="margin-top:10px">
         <label>Modus</label>
         <div class="radio">
@@ -257,7 +268,7 @@
   <!-- 2 EREIGNISSE -------------------------------------------------------->
   <section id="ereignisse">
     <h2>Ereignisse</h2>
-    <p class="unter">Prüfe die Vorschläge und gib ihnen Namen. Urlaube und Ausflüge bekommen eigene Ordner (z.B. <i>2026-05_Urlaub_Frankreich</i>). Alles andere landet im Monatsordner.</p>
+    <p class="unter">Prüfe die Vorschläge und gib ihnen Namen. Urlaube und Ausflüge bekommen eigene Ordner (z.B. <i>2026-05_Urlaub_Frankreich</i>). Alles andere landet im Alltag-Ordner.</p>
     <div class="karte">
       <h3>Erkannte Reisen &amp; Vorschläge</h3>
       <p class="hilfe" style="margin-top:-6px"><b>automatisch</b> = wird ohne dein Zutun ein eigener Ordner (GPS-Reise mit vielen Fotos).
@@ -415,6 +426,11 @@ async function abfragen() {
     text = `${f.aufgabe}: ${f.erledigt.toLocaleString("de-DE")} / ${f.gesamt.toLocaleString("de-DE")} (${p} %)${rest}`;
     $("balken_innen").style.width = p + "%";
   }
+  const sch = zustand.schritt || {};
+  if (laeuft && !f.gesamt && sch.name) {
+    const seit = Math.round(Date.now() / 1000 - sch.start);
+    text = `Schritt ${sch.nr}/${sch.gesamt}: ${sch.name} · ${seit < 90 ? seit + " s" : Math.round(seit / 60) + " min"}`;
+  }
   $("balken").style.display = laeuft && f.gesamt ? "block" : "none";
   $("status-text").textContent = text;
   $("fehlerbox").style.display = zustand.fehler ? "block" : "none";
@@ -461,10 +477,10 @@ function zuhauseUmschalten() {
   const fest = document.querySelector("input[name=zuhause_art]:checked")?.value === "fest";
   $("zuhause_fest").style.display = fest ? "flex" : "none";
 }
-const ZAHLFELDER = ["reise.min_entfernung_km","reise.max_luecke_tage","reise.min_fotos","reise.min_vorschlag","pdf.max_seiten_pro_ereignis","pdf.max_beschnitt","themen.kinder.seiten","themen.freunde.seiten","themen.haus.seiten","themen.sonstiges_seiten","serien.behalten","favoriten.anteil","favoriten.max",
+const ZAHLFELDER = ["reise.min_entfernung_km","reise.max_luecke_tage","reise.min_fotos","reise.min_vorschlag","pdf.max_seiten_pro_ereignis","pdf.max_beschnitt","ablage.max_megapixel","ablage.jpeg_qualitaet","analyse.max_megapixel","themen.kinder.seiten","themen.freunde.seiten","themen.haus.seiten","themen.sonstiges_seiten","serien.behalten","favoriten.anteil","favoriten.max",
                     "pdf.zoom_staerke","pdf.dpi","pdf.jpeg_qualitaet","pdf.min_sterne"];
 const TEXTFELDER = ["serien.aktion","pdf.titel","pdf.untertitel","aussortieren.staerke","ordner.alltag"];
-const JANEIN = ["pdf.bild_datum","pdf.seitenzahlen","pdf.pptx","themen.inhalte_erkennen","themen.kinder.aktiv",
+const JANEIN = ["ablage.verkleinern", "pdf.bild_datum","pdf.seitenzahlen","pdf.pptx","themen.inhalte_erkennen","themen.kinder.aktiv",
                 "themen.freunde.aktiv","themen.haus.aktiv","themen.haus.eigenes_pdf"];
 function fuelleConfig(c) {
   $("quellen").innerHTML = "";

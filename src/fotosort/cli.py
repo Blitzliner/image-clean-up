@@ -25,33 +25,41 @@ from . import duplikate, ereignisse, inhalt, personen, planung, themen
 from .ablage import ablegen
 from .analyse import analysiere_alle
 from .config import lade_config
+from .fortschritt import Schritt, starte_wachhund
 from .jahresrueckblick import erstelle_rueckblicke
 from .vorschau import erstelle_vorschau
 
 
 def plan_erstellen(cfg: dict, interaktiv: bool):
     """Analysieren -> Duplikate/Serien -> Ereignisse -> Favoriten -> Zielpfade."""
-    items = analysiere_alle(cfg)
+    N = 7
+    with Schritt(1, N, "Dateien einlesen"):
+        items = analysiere_alle(cfg)
     if not items:
         print("Keine Fotos gefunden. Stimmen die 'quellen' in config.yaml?")
         sys.exit(1)
-    inhalt.erkenne_inhalte(items, cfg)  # CLIP (optional)
-    statistik = duplikate.bereinigen(items, cfg)
-    gruppen = ereignisse.ordne_zu(items, cfg, interaktiv=interaktiv)
-    personen.erkenne_personen(items, cfg)
-    korrekturen = planung.lade_korrekturen(cfg)
-    verschoben = planung.wende_ordner_korrekturen_an(items, korrekturen, cfg, gruppen)
-    if verschoben:
-        statistik["manuell_verschoben"] = verschoben
-    planung.wende_korrekturen_an(items, korrekturen)  # manuell aussortiert/behalten
-    statistik.update({f"thema_{k}": v for k, v in
-                      themen.bestimme_themen(items, cfg, korrekturen).items()})
-    themen.themen_ordner(items, cfg)
-    statistik["favoriten"] = planung.waehle_favoriten(items, cfg)
-    korrigiert = planung.wende_korrekturen_an(items, korrekturen)  # manuelle Sterne
-    if korrigiert:
-        statistik["manuell_korrigiert"] = korrigiert
-        statistik["favoriten"] = sum(1 for i in items if i["favorit"])
+    with Schritt(2, N, "Bildinhalte erkennen"):
+        inhalt.erkenne_inhalte(items, cfg)  # CLIP (optional)
+    with Schritt(3, N, "Duplikate, Serien und Qualität prüfen"):
+        statistik = duplikate.bereinigen(items, cfg)
+    with Schritt(4, N, "Ereignisse zuordnen"):
+        gruppen = ereignisse.ordne_zu(items, cfg, interaktiv=interaktiv)
+    with Schritt(5, N, "Personen erkennen"):
+        personen.erkenne_personen(items, cfg)
+    with Schritt(6, N, "Themen und Favoriten"):
+        korrekturen = planung.lade_korrekturen(cfg)
+        verschoben = planung.wende_ordner_korrekturen_an(items, korrekturen, cfg, gruppen)
+        if verschoben:
+            statistik["manuell_verschoben"] = verschoben
+        planung.wende_korrekturen_an(items, korrekturen)  # manuell aussortiert/behalten
+        statistik.update({f"thema_{k}": v for k, v in
+                          themen.bestimme_themen(items, cfg, korrekturen).items()})
+        themen.themen_ordner(items, cfg)
+        statistik["favoriten"] = planung.waehle_favoriten(items, cfg)
+        korrigiert = planung.wende_korrekturen_an(items, korrekturen)  # manuelle Sterne
+        if korrigiert:
+            statistik["manuell_korrigiert"] = korrigiert
+            statistik["favoriten"] = sum(1 for i in items if i["favorit"])
     # Haus-Ordner als Gruppe für Vorschau/Übersicht bekannt machen
     bekannt = {g["gruppe"] for g in gruppen}
     for i in items:
@@ -59,7 +67,8 @@ def plan_erstellen(cfg: dict, interaktiv: bool):
             bekannt.add(i["gruppe"])
             gruppen.append({"gruppe": i["gruppe"], "name": i["gruppe"].replace("_", " ").replace("/", " · "),
                             "art": "haus"})
-    planung.zielpfade(items, cfg)
+    with Schritt(7, N, "Zielordner planen"):
+        planung.zielpfade(items, cfg)
     statistik["dateien"] = len(items)
     statistik["behalten"] = sum(1 for i in items if i["status"] == "behalten")
     return items, gruppen, statistik
@@ -95,6 +104,7 @@ def main(argv: list[str] | None = None) -> None:
         starte_ui(args.config, args.port)
         return
 
+    starte_wachhund()
     cfg = lade_config(args.config)
     if not Path(args.config).exists():
         print(f"Hinweis: {args.config} nicht gefunden – es gelten die Standardwerte.")
