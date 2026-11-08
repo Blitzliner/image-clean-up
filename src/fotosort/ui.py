@@ -90,8 +90,20 @@ class Zustand:
             except SystemExit:
                 self.fehler = "Abgebrochen – siehe Protokoll."
             except Exception as fehler:  # Fehler in der Oberfläche anzeigen
-                self.fehler = f"{type(fehler).__name__}: {fehler}"
-                self.log.append(traceback.format_exc().strip().splitlines()[-1])
+                # Wo ist es passiert? (letzte Stelle im fotosort-Code)
+                stapel = traceback.extract_tb(fehler.__traceback__)
+                eigene = [f for f in stapel if "fotosort" in f.filename.replace("\\", "/")]
+                ort = ""
+                if eigene:
+                    f = eigene[-1]
+                    ort = f" (in {Path(f.filename).name}, Zeile {f.lineno}, {f.name})"
+                self.fehler = f"{type(fehler).__name__}: {fehler}{ort}"
+                self.log.append(f"FEHLER: {self.fehler}")
+                for zeile in traceback.format_exception(fehler)[-6:]:
+                    for z in zeile.rstrip().splitlines():
+                        self.log.append("  " + z)
+                self.log.append("Die Oberfläche läuft weiter. Bitte diese Meldung weitergeben, "
+                                "falls der Fehler bleibt.")
             finally:
                 self.version += 1
                 self.auftrag = None
@@ -397,6 +409,11 @@ def baue_handler(z: Zustand):
 
             if pfad == "/api/ordner_waehlen":
                 return self._json({"pfad": ordner_waehlen()})
+
+            if pfad == "/api/diagnose":
+                from .diagnose import diagnose
+
+                return self._json({"ok": z.starte("Diagnose", lambda: diagnose(z.cfg))})
 
             if pfad == "/api/analysieren":
                 ok = z.starte("Analyse", z.neu_planen)

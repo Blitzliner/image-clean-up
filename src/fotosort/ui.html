@@ -261,6 +261,7 @@
     <div class="aktionen">
       <button class="btn haupt" onclick="speichern(true)">Speichern &amp; analysieren</button>
       <button class="btn" onclick="speichern(false)">Nur speichern</button>
+      <button class="btn" onclick="diagnoseStarten()" title="Prüft Bibliotheken und Modelle auf diesem Rechner">🩺 Diagnose</button>
       <span class="hilfe" id="config_pfad"></span>
     </div>
   </section>
@@ -521,6 +522,11 @@ async function speichern(analysieren) {
   await api("/api/config", c);
   if (analysieren) { naechsterTab = "ereignisse"; await api("/api/analysieren", {}); abfrageSofort(); }
   else { $("status-text").textContent = "gespeichert"; }
+}
+async function diagnoseStarten() {
+  await api("/api/diagnose", {});
+  $("protokoll").classList.add("offen");
+  abfrageSofort();
 }
 function abfrageSofort() { clearTimeout(abfrageTimer); abfrageTimer = setTimeout(abfragen, 300); }
 

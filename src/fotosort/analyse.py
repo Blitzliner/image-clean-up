@@ -249,6 +249,29 @@ def _cache_schluessel(p: Path) -> str | None:
     return f"{p.resolve()}|{st.st_size}|{int(st.st_mtime)}|v{ANALYSE_VERSION}"
 
 
+def bereinige_werte(i: dict) -> None:
+    """Ungültige Zahlen (NaN, unendlich) entfernen, damit spätere Schritte nicht scheitern."""
+    def ok(x):
+        return isinstance(x, (int, float)) and math.isfinite(x)
+
+    lat, lon = i.get("lat"), i.get("lon")
+    if lat is not None and not (ok(lat) and ok(lon) and abs(lat) <= 90 and abs(lon) <= 180):
+        i["lat"] = i["lon"] = None
+    for feld, ersatz in (("schaerfe", 0.0), ("helligkeit", 0.5), ("dunkel_anteil", 0.0),
+                         ("hell_anteil", 0.0), ("score", 0.0)):
+        if feld in i and i[feld] is not None and not ok(i[feld]):
+            i[feld] = ersatz
+    for feld in ("breite", "hoehe", "groesse"):
+        if not ok(i.get(feld, 0)):
+            i[feld] = 0
+    gesichter = i.get("gesichter") or []
+    gueltig = [all(ok(x) for x in g) for g in gesichter]
+    if not all(gueltig):
+        vektoren = i.get("gesichts_vektoren") or [""] * len(gesichter)
+        i["gesichter"] = [g for g, ja in zip(gesichter, gueltig) if ja]
+        i["gesichts_vektoren"] = [v for v, ja in zip(vektoren, gueltig) if ja]
+
+
 def lade_cache(pfad: Path) -> dict:
     """Cache lesen. Ist er beschädigt (z.B. Abbruch beim Schreiben), die Sicherung nehmen."""
     for kandidat in (pfad, pfad.with_suffix(pfad.suffix + ".bak")):
@@ -349,6 +372,10 @@ def analysiere_alle(cfg: dict) -> list[dict]:
                 uebernehmen(k, info)
         speichere_cache(cache_pfad, cache)
         fortschritt.fertig()
+
+    # Zahlenwerte prüfen: NaN/unendlich (z.B. aus kaputtem EXIF) unschädlich machen
+    for i in ergebnisse:
+        bereinige_werte(i)
 
     # Sehr große Bilder auch aus dem Cache als Hinweis kennzeichnen
     for i in ergebnisse:

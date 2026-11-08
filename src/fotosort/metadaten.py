@@ -11,6 +11,7 @@ Reihenfolge für den Zeitpunkt:
 from __future__ import annotations
 
 import datetime as dt
+import math
 import os
 import re
 from pathlib import Path
@@ -128,7 +129,10 @@ def gps_aus_exif(gps_ifd: dict) -> tuple[float, float] | tuple[None, None]:
 
         lat = grad(gps_ifd[2], gps_ifd.get(1, "N"))
         lon = grad(gps_ifd[4], gps_ifd.get(3, "E"))
-        if lat == 0 and lon == 0:
+        # Kaputte GPS-Daten (z.B. 0/0 -> NaN) oder unmögliche Werte verwerfen
+        if not (math.isfinite(lat) and math.isfinite(lon)):
+            return None, None
+        if abs(lat) > 90 or abs(lon) > 180 or (lat == 0 and lon == 0):
             return None, None
         return round(lat, 6), round(lon, 6)
     except (KeyError, TypeError, ValueError, ZeroDivisionError):

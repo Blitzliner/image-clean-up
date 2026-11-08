@@ -6,6 +6,7 @@ Kommandozeile.
   uv run fotosort pdf           -> Jahresrückblick-PDF aus den Favoriten
   uv run fotosort alles         -> sortieren + pdf
   uv run fotosort ui            -> Oberfläche im Browser (alles per Klick)
+  uv run fotosort diagnose      -> prüft, ob auf diesem Rechner alles funktioniert
 
 Optionen:
   --config PFAD    andere Konfigurationsdatei (Standard: config.yaml)
@@ -89,7 +90,7 @@ def zusammenfassung(items: list[dict], gruppen: list[dict], statistik: dict) -> 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="fotosort", description="Fotos sortieren & Jahresrückblick")
-    parser.add_argument("befehl", choices=["analysieren", "sortieren", "pdf", "alles", "ui"])
+    parser.add_argument("befehl", choices=["analysieren", "sortieren", "pdf", "alles", "ui", "diagnose"])
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--interaktiv", action="store_true", help="erkannte Reisen benennen")
     parser.add_argument("--ja", action="store_true", help="ohne Rückfrage ausführen")
@@ -112,6 +113,10 @@ def main(argv: list[str] | None = None) -> None:
     cfg = lade_config(args.config)
     if not Path(args.config).exists():
         print(f"Hinweis: {args.config} nicht gefunden – es gelten die Standardwerte.")
+    if args.befehl == "diagnose":
+        from .diagnose import diagnose
+
+        sys.exit(0 if diagnose(cfg) else 1)
 
     if args.befehl in ("analysieren", "sortieren", "alles"):
         if not cfg["quellen"]:

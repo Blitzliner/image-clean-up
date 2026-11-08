@@ -106,6 +106,23 @@ Original-Dateipfade. Für die E-Mail: *Datei → Exportieren → PDF*.
 **Auswahl ändern:** Im Windows-Explorer Sterne vergeben/entfernen und den Rückblick neu
 erstellen. Ins PDF kommen Bilder mit mind. 4 Sternen.
 
+## Diagnose (neuer Rechner / Probleme)
+
+```powershell
+uv run fotosort diagnose
+```
+oder in der Oberfläche unter Einstellungen **🩺 Diagnose**. Prüft nacheinander – jeweils in
+einem eigenen Prozess, damit auch Abstürze erkannt werden – Python, Prozessor (AVX),
+Visual-C++-Runtime, numpy/Pillow, OpenCV + Gesichtsmodelle, onnxruntime, fastembed und die
+beiden CLIP-Modelle (inkl. Download). Am Ende stehen konkrete Empfehlungen; läuft alles durch,
+wird eine frühere Sperre der Inhaltserkennung automatisch aufgehoben.
+
+Typische Lösungen bei Absturz von onnxruntime (Windows-Fehler 0xC0000005):
+1. Visual C++ Redistributable (x64) installieren **und den PC neu starten**:
+   https://aka.ms/vs/17/release/vc_redist.x64.exe
+2. Ältere onnxruntime-Version: `uv add "onnxruntime==1.19.2; python_version < '3.13'"`
+3. Sonst in den Einstellungen „Bildinhalte erkennen“ auf „nein“ – alles andere funktioniert.
+
 ## Kommandozeile (Alternative)
 
 ```powershell
