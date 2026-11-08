@@ -136,9 +136,10 @@ Alle Schwellwerte stehen mit Erklärung in `src/fotosort/config.py` und lassen s
 `config.yaml` überschreiben. Die CLIP-Beschreibungen (z.B. was als „Haus“ zählt) stehen
 in `inhalt.py` und können ergänzt werden.
 
-## Wie es mit vielen Bildern skaliert (z.B. 3000 Fotos)
+## Wie es mit vielen Bildern skaliert (3.000 – 10.000+ Fotos)
 
-Gemessen mit 3135 Bildern / 3690 Gesichtern:
+Gemessen mit 3.135 und 10.032 Bildern (11.808 Gesichter) – Planung, Duplikate,
+Ereignisse, Personen und Themen brauchen auch bei 10.000 Bildern zusammen nur ca. 5 s:
 
 | Schritt | Dauer |
 |---|---|
@@ -152,6 +153,23 @@ Gemessen mit 3135 Bildern / 3690 Gesichtern:
 
 Tipps: Fotos lokal einlesen (nicht vom NAS als Quelle), Ziel = NAS. Mehrere Jahre in
 einem Lauf sind kein Problem – jedes Jahr bekommt seinen Ordner und Rückblick.
+
+**Robustheit bei vielen Dateien**
+- Fortschritt mit Restzeit in der Konsole und als Balken oben in der Oberfläche
+  (Einlesen, Bildinhalte, Ablegen, Rückblick).
+- Abbrechen ist ungefährlich: Der Cache wird jede Minute gesichert (mit Sicherungskopie
+  `.bak`), beim nächsten Start geht es dort weiter. Beim Ablegen werden bereits kopierte
+  Dateien übersprungen.
+- Sehr große Bilder (Panoramas bis 600 Megapixel, `analyse.max_megapixel`) werden normal
+  verarbeitet; die Pillow-Warnung „DecompressionBombWarning“ erscheint nicht mehr, stattdessen
+  ein Hinweis beim Bild.
+- Defekte Dateien stoppen nichts: Sie stehen in der Oberfläche unter **Bilder prüfen → Probleme**
+  und am Ende des Einlesens im Protokoll.
+- Stürzt ein Hilfsprozess ab (z.B. zu wenig Arbeitsspeicher), wird der Rest nacheinander eingelesen.
+- Vor dem Ablegen wird der freie Speicherplatz im Ziel geprüft; Netzwerk-Aussetzer werden
+  bis zu 3× wiederholt, Fehler landen in `ablage_fehler.txt`.
+- In der Oberfläche sind große Ordner anfangs zugeklappt und zeigen je 300 Bilder
+  („weitere anzeigen“).
 
 ## Hinweise
 

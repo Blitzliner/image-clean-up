@@ -89,36 +89,51 @@ def erkenne_personen(items: list[dict], cfg: dict) -> list[dict]:
             if aehnlich[k, beste[k]] >= SCHWELLE_BEKANNT:
                 zuordnung[k] = bekannte[beste[k]]["id"]
 
-    # 2) übrige Gesichter gruppieren (große, gut erkennbare Gesichter zuerst)
+    # 2) übrige Gesichter gruppieren (große, gut erkennbare Gesichter zuerst).
+    #    Die Gruppenmittelpunkte werden in einer Matrix fortgeschrieben – so
+    #    bleibt das auch bei zehntausenden Gesichtern schnell.
     offen = sorted((k for k in range(len(gesichter)) if not zuordnung[k]),
                    key=lambda k: -gesichter[k][3])
-    gruppen: list[list[int]] = []
-    summen: list[np.ndarray] = []
+    print(f"Personen: {len(gesichter):_} Gesichter, davon {len(gesichter) - len(offen):_} "
+          f"bekannten Personen zugeordnet.".replace("_", "."))
+    summen = np.zeros((max(len(offen), 1), vektoren.shape[1]), dtype=np.float32)
+    zentren = np.zeros_like(summen)
+    mitglieder: list[list[int]] = []
     for k in offen:
-        if summen:
-            z = _norm(np.stack(summen))
-            s = z @ vektoren[k]
+        n = len(mitglieder)
+        if n:
+            s = zentren[:n] @ vektoren[k]
             j = int(s.argmax())
             if s[j] >= SCHWELLE_GRUPPE:
-                gruppen[j].append(k)
-                summen[j] = summen[j] + vektoren[k]
+                mitglieder[j].append(k)
+                summen[j] += vektoren[k]
+                zentren[j] = summen[j] / (np.linalg.norm(summen[j]) + 1e-9)
                 continue
-        gruppen.append([k])
-        summen.append(vektoren[k].copy())
+        mitglieder.append([k])
+        summen[n] = vektoren[k]
+        zentren[n] = vektoren[k]
 
     # 3) sehr ähnliche Gruppen verschmelzen
-    verschmolzen = True
-    while verschmolzen and len(gruppen) > 1:
-        verschmolzen = False
-        z = _norm(np.stack(summen))
-        s = z @ z.T
-        np.fill_diagonal(s, -1)
-        a, b = np.unravel_index(s.argmax(), s.shape)
-        if s[a, b] >= SCHWELLE_VERSCHMELZEN:
-            gruppen[a] += gruppen[b]
-            summen[a] = summen[a] + summen[b]
-            del gruppen[b], summen[b]
-            verschmolzen = True
+    n = len(mitglieder)
+    if n > 1:
+        lebendig = np.ones(n, dtype=bool)
+        aehnlich = zentren[:n] @ zentren[:n].T
+        np.fill_diagonal(aehnlich, -1)
+        while True:
+            a_, b_ = np.unravel_index(int(aehnlich.argmax()), aehnlich.shape)
+            if aehnlich[a_, b_] < SCHWELLE_VERSCHMELZEN:
+                break
+            mitglieder[a_] += mitglieder[b_]
+            mitglieder[b_] = []
+            summen[a_] += summen[b_]
+            zentren[a_] = summen[a_] / (np.linalg.norm(summen[a_]) + 1e-9)
+            lebendig[b_] = False
+            aehnlich[b_, :] = aehnlich[:, b_] = -1
+            zeile = zentren[:n] @ zentren[a_]
+            zeile[~lebendig] = -1
+            zeile[a_] = -1
+            aehnlich[a_, :] = aehnlich[:, a_] = zeile
+    gruppen = [m for m in mitglieder if m]
 
     # Gruppen-IDs vergeben: stabil über den Fingerabdruck des größten Gesichts
     gruppen.sort(key=lambda g: -len(g))

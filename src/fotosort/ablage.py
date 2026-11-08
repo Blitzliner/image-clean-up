@@ -15,9 +15,49 @@ import csv
 import datetime as dt
 import os
 import shutil
+import time
 from pathlib import Path
 
 from .bewertung import schreibe_sterne
+from .fortschritt import Fortschritt
+
+
+def _kopiere(quelle: Path, ziel: Path, versuche: int = 3) -> None:
+    """Kopieren mit Wiederholung (Netzlaufwerke haben manchmal kurze Aussetzer)."""
+    for versuch in range(1, versuche + 1):
+        try:
+            shutil.copy2(quelle, ziel)
+            if ziel.stat().st_size != quelle.stat().st_size:
+                raise OSError("Kopie unvollständig")
+            return
+        except OSError:
+            if versuch == versuche:
+                raise
+            time.sleep(2 * versuch)
+
+
+def pruefe_speicherplatz(items: list[dict], cfg: dict) -> bool:
+    """Reicht der Platz im Ziel? Gibt False (mit Meldung) zurück, wenn nicht."""
+    ziel = Path(cfg["ziel"])
+    pruefen = ziel
+    while not pruefen.exists() and pruefen.parent != pruefen:
+        pruefen = pruefen.parent
+    try:
+        frei = shutil.disk_usage(pruefen).free
+    except OSError:
+        print(f"Hinweis: Speicherplatz von {ziel} konnte nicht geprüft werden.")
+        return True
+    benoetigt = 0
+    for i in items:
+        if not Path(i["ziel"]).exists():
+            groesse = i.get("groesse", 0)
+            benoetigt += groesse * (1 + len(i.get("kopien", [])))
+    gb = lambda b: f"{b / 1e9:.1f} GB".replace(".", ",")
+    print(f"Speicherplatz: benötigt ca. {gb(benoetigt)}, frei {gb(frei)}.")
+    if benoetigt > frei * 0.98:
+        print("FEHLER: Nicht genug Speicherplatz im Ziel – Ablage abgebrochen, nichts verändert.")
+        return False
+    return True
 
 PROTOKOLL_NAME = "_fotosort_protokoll.csv"
 SPALTEN = ["ziel", "original", "zeit", "zeit_herkunft", "quelle", "art", "status",
@@ -66,6 +106,11 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
     statistik = {"kopiert": 0, "verschoben": 0, "uebersprungen": 0, "fehler": 0, "sterne": 0,
                  "themen_kopien": 0}
     pro_jahr: dict[Path, list[dict]] = {}
+    if not pruefe_speicherplatz(items, cfg):
+        statistik["fehler"] = len(items)
+        return statistik
+    fortschritt = Fortschritt("Ablegen", len(items), "Dateien")
+    fehlerliste: list[str] = []
 
     for nr, i in enumerate(items, start=1):
         quelle, ziel = Path(i["pfad"]), Path(i["ziel"])
@@ -89,9 +134,7 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
                         n += 1
                     ziel = k
                     i["ziel"] = str(ziel)
-                shutil.copy2(quelle, ziel)
-                if ziel.stat().st_size != quelle.stat().st_size:
-                    raise OSError("Kopie unvollständig")
+                _kopiere(quelle, ziel)
                 if i.get("favorit") and schreibe_sterne(ziel, 5):
                     statistik["sterne"] += 1
                 if cfg["dateizeit_setzen"]:
@@ -104,7 +147,9 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
                     statistik["kopiert"] += 1
         except OSError as fehler:
             print(f"  FEHLER bei {quelle.name}: {fehler}")
+            fehlerliste.append(f"{quelle}: {fehler}")
             statistik["fehler"] += 1
+            fortschritt.schritt()
             continue
 
         # Kopien in die Themen-Ordner (vom bereits abgelegten Hauptbild)
@@ -113,7 +158,7 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
             try:
                 if not kopie.exists() and ziel.exists():
                     kopie.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(ziel, kopie)
+                    _kopiere(ziel, kopie)
                     statistik["themen_kopien"] += 1
             except OSError as fehler:
                 print(f"  FEHLER bei Kopie {kopie.name}: {fehler}")
@@ -121,8 +166,21 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
 
         jahr_ordner = Path(cfg["ziel"]) / str(i["jahr"])
         pro_jahr.setdefault(jahr_ordner, []).append(protokoll_zeile(i))
-        if nr % 100 == 0:
-            print(f"  {nr}/{len(items)}")
+        fortschritt.schritt()
+        # Protokoll zwischendurch sichern (bei Abbruch weiß man, was schon da ist)
+        if nr % 1000 == 0:
+            _schreibe_protokolle(pro_jahr)
+    fortschritt.fertig()
+    _schreibe_protokolle(pro_jahr)
+    if fehlerliste:
+        datei = Path(cfg["_basis"]) / "ablage_fehler.txt"
+        datei.write_text("\n".join(fehlerliste), encoding="utf-8")
+        print(f"{len(fehlerliste)} Fehler – Liste in {datei}. Einfach erneut ablegen: "
+              f"bereits kopierte Dateien werden übersprungen.")
+    return statistik
+
+
+def _schreibe_protokolle(pro_jahr: dict) -> None:
 
     # Protokolle zusammenführen (frühere Läufe bleiben erhalten)
     for jahr_ordner, zeilen in pro_jahr.items():
@@ -130,4 +188,3 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
         alt = lese_protokoll(pfad)
         alt.update({z["ziel"]: z for z in zeilen})
         schreibe_csv(pfad, sorted(alt.values(), key=lambda z: z["zeit"]))
-    return statistik

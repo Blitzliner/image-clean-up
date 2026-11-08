@@ -19,13 +19,17 @@ import hashlib
 import json
 import math
 import os
+import time
+import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageOps
 
 from . import gesichter as gesichter_mod
+from .fortschritt import Fortschritt
 from .metadaten import (
     bestimme_zeit,
     erkenne_art,
@@ -36,6 +40,18 @@ from .metadaten import (
 
 ANALYSE_VERSION = 4  # erhöhen, wenn sich die Berechnung ändert -> Cache neu
 ANALYSE_KANTE = 1024  # Bilder werden für die Analyse auf diese Kante verkleinert
+
+# Pillow warnt ab ~89 Megapixeln vor "Decompression Bombs" (manipulierte
+# Dateien). Echte Panoramas haben schnell 100-200 MP – wir erlauben bis zu
+# analyse.max_megapixel (Standard 600) und vermerken große Bilder als Hinweis.
+STANDARD_MAX_MP = 600
+
+
+def setze_pixel_grenze(max_mp: float = STANDARD_MAX_MP) -> None:
+    Image.MAX_IMAGE_PIXELS = int(max_mp * 1_000_000)
+
+
+setze_pixel_grenze()
 
 try:  # HEIC-Unterstützung (iPhone/Samsung-HEIF), falls installiert
     import pillow_heif
@@ -132,7 +148,24 @@ def analysiere_datei(pfad_text: str, optionen: dict) -> dict | None:
     """
     Eine Datei vollständig analysieren. Läuft in einem eigenen Prozess.
     Gibt ein Dictionary mit allen Infos zurück (oder None, wenn keine Mediendatei).
+    Warnungen (z.B. sehr große Bilder) landen in info["hinweise"] statt in der Konsole.
     """
+    setze_pixel_grenze(optionen.get("max_megapixel", STANDARD_MAX_MP))
+    with warnings.catch_warnings(record=True) as gesammelt:
+        warnings.simplefilter("always")
+        info = _analysiere(pfad_text, optionen)
+    if info is not None:
+        hinweise = list(dict.fromkeys(str(w.message).split(",")[0][:160] for w in gesammelt))
+        mp = info.get("breite", 0) * info.get("hoehe", 0) / 1e6
+        if mp > 89:
+            hinweise = [h for h in hinweise if "decompression bomb" not in h.lower()]
+            hinweise.append(f"sehr großes Bild ({mp:.0f} Megapixel, z.B. Panorama) – wird normal verarbeitet")
+        if hinweise:
+            info["hinweise"] = hinweise
+    return info
+
+
+def _analysiere(pfad_text: str, optionen: dict) -> dict | None:
     pfad = Path(pfad_text)
     quelle = erkenne_quelle(pfad.name, optionen.get("quellen_muster"))
     art = erkenne_art(pfad, quelle)
@@ -172,6 +205,9 @@ def analysiere_datei(pfad_text: str, optionen: dict) -> dict | None:
                     optionen.get("erkenner_pfad"), mit_vektoren=True,
                 )
             info["score"] = berechne_score(info)
+    except Image.DecompressionBombError as fehler:
+        info["fehler"] = (f"Bild zu groß ({fehler}). Grenze in config.yaml unter "
+                          f"analyse.max_megapixel erhöhen.")
     except Exception as fehler:  # defekte Datei -> trotzdem einsortieren
         info["fehler"] = f"{type(fehler).__name__}: {fehler}"
 
@@ -205,23 +241,42 @@ def finde_dateien(quellen: list[str], ausschliessen: list[str]) -> list[Path]:
     return sorted(dateien)
 
 
-def _cache_schluessel(p: Path) -> str:
-    st = p.stat()
+def _cache_schluessel(p: Path) -> str | None:
+    try:
+        st = p.stat()
+    except OSError:  # Datei inzwischen verschwunden / Netzlaufwerk weg
+        return None
     return f"{p.resolve()}|{st.st_size}|{int(st.st_mtime)}|v{ANALYSE_VERSION}"
 
 
+def lade_cache(pfad: Path) -> dict:
+    """Cache lesen. Ist er beschädigt (z.B. Abbruch beim Schreiben), die Sicherung nehmen."""
+    for kandidat in (pfad, pfad.with_suffix(pfad.suffix + ".bak")):
+        if kandidat.exists():
+            try:
+                return json.loads(kandidat.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+                print(f"Hinweis: {kandidat.name} ist beschädigt – versuche Sicherung.")
+    return {}
+
+
+def speichere_cache(pfad: Path, cache: dict) -> None:
+    """Sicher speichern: erst temporäre Datei, alte Version als .bak behalten."""
+    tmp = pfad.with_suffix(pfad.suffix + ".tmp")
+    tmp.write_text(json.dumps(cache), encoding="utf-8")
+    if pfad.exists():
+        os.replace(pfad, pfad.with_suffix(pfad.suffix + ".bak"))
+    os.replace(tmp, pfad)
+
+
 def analysiere_alle(cfg: dict) -> list[dict]:
-    """Alle Quelldateien analysieren (parallel, mit Cache)."""
+    """Alle Quelldateien analysieren (parallel, mit Cache und Fortschrittsanzeige)."""
+    print("Suche Dateien in den Quellordnern …")
     dateien = finde_dateien(cfg["quellen"], [cfg["ordner"]["aussortiert"]])
-    print(f"{len(dateien)} Mediendateien gefunden.")
+    print(f"{len(dateien):_} Mediendateien gefunden.".replace("_", "."))
 
     cache_pfad = Path(cfg["analyse"]["cache_datei"])
-    cache: dict = {}
-    if cache_pfad.exists():
-        try:
-            cache = json.loads(cache_pfad.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            cache = {}
+    cache = lade_cache(cache_pfad)
 
     modelle = gesichter_mod.modelle_bereitstellen(cfg["analyse"]["modell_ordner"])
     optionen = {
@@ -230,12 +285,15 @@ def analysiere_alle(cfg: dict) -> list[dict]:
         "quellen_muster": cfg["quellen_muster"],
         "modell_pfad": modelle["erkennung"],
         "erkenner_pfad": modelle["wiedererkennung"],
+        "max_megapixel": cfg["analyse"].get("max_megapixel", STANDARD_MAX_MP),
     }
 
     ergebnisse: list[dict] = []
     offen: list[tuple[str, Path]] = []
     for p in dateien:
         k = _cache_schluessel(p)
+        if k is None:
+            continue
         if k in cache:
             if cache[k] is not None:
                 ergebnisse.append(cache[k])
@@ -243,27 +301,70 @@ def analysiere_alle(cfg: dict) -> list[dict]:
             offen.append((k, p))
 
     if offen:
-        print(f"Analysiere {len(offen)} neue Dateien "
-              f"({len(dateien) - len(offen)} aus dem Cache) ...")
+        print(f"{len(offen):_} neue Dateien einlesen ({len(dateien) - len(offen):_} aus dem Cache)."
+              .replace("_", "."))
         prozesse = cfg["analyse"]["prozesse"] or max(1, (os.cpu_count() or 2) - 1)
-        fertig = 0
-        with ProcessPoolExecutor(max_workers=prozesse) as pool:
-            auftraege = {pool.submit(analysiere_datei, str(p), optionen): k for k, p in offen}
-            for auftrag in as_completed(auftraege):
-                k = auftraege[auftrag]
+        fortschritt = Fortschritt("Einlesen", len(offen), "Bilder")
+        letzte_sicherung = time.time()
+
+        def uebernehmen(k, info):
+            nonlocal letzte_sicherung
+            cache[k] = info
+            if info is not None:
+                ergebnisse.append(info)
+            fortschritt.schritt()
+            # Zwischenspeichern alle 60 s: ein Abbruch verliert kaum Arbeit
+            if time.time() - letzte_sicherung > 60:
+                speichere_cache(cache_pfad, cache)
+                letzte_sicherung = time.time()
+
+        try:
+            with ProcessPoolExecutor(max_workers=prozesse) as pool:
+                auftraege = {pool.submit(analysiere_datei, str(p), optionen): (k, p) for k, p in offen}
+                for auftrag in as_completed(auftraege):
+                    k, p = auftraege[auftrag]
+                    try:
+                        info = auftrag.result()
+                    except BrokenProcessPool:
+                        raise
+                    except Exception as fehler:
+                        print(f"  Fehler bei {p.name}: {fehler}")
+                        info = None
+                    uebernehmen(k, info)
+        except BrokenProcessPool:
+            # Ein Hilfsprozess ist abgestürzt (meist zu wenig Arbeitsspeicher bei
+            # riesigen Dateien) -> den Rest nacheinander im Hauptprozess einlesen
+            erledigt = {k for k in cache}
+            rest = [(k, p) for k, p in offen if k not in erledigt]
+            print(f"  Hinweis: Ein Hilfsprozess ist abgestürzt – lese die restlichen "
+                  f"{len(rest)} Dateien nacheinander ein (langsamer, aber sicher).")
+            for k, p in rest:
                 try:
-                    info = auftrag.result()
+                    info = analysiere_datei(str(p), optionen)
                 except Exception as fehler:
-                    print(f"  Fehler bei {k.split('|')[0]}: {fehler}")
-                    continue
-                cache[k] = info
-                if info is not None:
-                    ergebnisse.append(info)
-                fertig += 1
-                if fertig % 50 == 0 or fertig == len(offen):
-                    print(f"  {fertig}/{len(offen)}")
-                    cache_pfad.write_text(json.dumps(cache), encoding="utf-8")
-        cache_pfad.write_text(json.dumps(cache), encoding="utf-8")
+                    print(f"  Fehler bei {p.name}: {fehler}")
+                    info = None
+                uebernehmen(k, info)
+        speichere_cache(cache_pfad, cache)
+        fortschritt.fertig()
+
+    # Sehr große Bilder auch aus dem Cache als Hinweis kennzeichnen
+    for i in ergebnisse:
+        mp = i.get("breite", 0) * i.get("hoehe", 0) / 1e6
+        if mp > 89 and not i.get("hinweise"):
+            i["hinweise"] = [f"sehr großes Bild ({mp:.0f} Megapixel, z.B. Panorama) – wird normal verarbeitet"]
+
+    # Probleme zusammenfassen (stehen auch in der Oberfläche unter "Probleme")
+    fehler = [i for i in ergebnisse if i.get("fehler")]
+    hinweise = [i for i in ergebnisse if i.get("hinweise")]
+    if fehler:
+        print(f"Achtung: {len(fehler)} Dateien konnten nicht (vollständig) gelesen werden, z.B.:")
+        for i in fehler[:5]:
+            print(f"  {i['name']}: {i['fehler'][:150]}")
+    if hinweise:
+        print(f"Hinweis: {len(hinweise)} Dateien mit Hinweisen, z.B.:")
+        for i in hinweise[:5]:
+            print(f"  {i['name']}: {i['hinweise'][0]}")
 
     # Sortierung strikt nach Aufnahmezeit
     ergebnisse.sort(key=lambda i: (i["zeit"], i["name"]))

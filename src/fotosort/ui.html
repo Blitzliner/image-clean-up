@@ -24,6 +24,8 @@
                  color: var(--ink); font-size: 12px; text-align: center; margin-right: 6px; }
   nav button.aktiv b { background: var(--accent); color: #fff; }
   #status { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  #balken { width: 160px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; display: none; }
+  #balken_innen { height: 100%; width: 0; background: var(--accent); transition: width .5s; }
   .punkt { width: 9px; height: 9px; border-radius: 50%; background: #b9b2a8; }
   .punkt.laeuft { background: var(--accent); animation: puls 1s infinite; }
   .punkt.fehler { background: var(--bad); }
@@ -140,7 +142,7 @@
     <button data-tab="pruefen"><b>4</b>Bilder prüfen</button>
     <button data-tab="ablegen"><b>5</b>Ablegen &amp; Rückblick</button>
   </nav>
-  <div id="status"><span class="punkt" id="punkt"></span><span id="status-text">bereit</span></div>
+  <div id="status"><div id="balken" title=""><div id="balken_innen"></div></div><span class="punkt" id="punkt"></span><span id="status-text">bereit</span></div>
 </header>
 
 <main>
@@ -311,6 +313,7 @@
         <button data-f="kinder">Kinder</button>
         <button data-f="freunde">Freunde</button>
         <button data-f="haus">Haus</button>
+        <button data-f="probleme" title="Dateien mit Lesefehlern oder Hinweisen (z.B. sehr große Panoramas)">Probleme</button>
       </div>
       <button class="btn klein" onclick="alleGruppen(true)">alle aufklappen</button>
       <button class="btn klein" onclick="alleGruppen(false)">alle zuklappen</button>
@@ -404,7 +407,16 @@ async function abfragen() {
   try { zustand = await api("/api/zustand"); } catch (e) { $("status-text").textContent = "keine Verbindung"; setTimeout(abfragen, 3000); return; }
   const laeuft = !!zustand.auftrag;
   $("punkt").className = "punkt" + (laeuft ? " laeuft" : zustand.fehler ? " fehler" : "");
-  $("status-text").textContent = laeuft ? zustand.auftrag + " läuft …" : zustand.fehler ? "Fehler" : (zustand.hat_plan ? "bereit · " + zustand.statistik.dateien + " Dateien" : "bereit");
+  const f = zustand.fortschritt || {};
+  let text = laeuft ? zustand.auftrag + " läuft …" : zustand.fehler ? "Fehler" : (zustand.hat_plan ? "bereit · " + Number(zustand.statistik.dateien).toLocaleString("de-DE") + " Dateien" : "bereit");
+  if (laeuft && f.gesamt) {
+    const p = Math.round(100 * f.erledigt / f.gesamt);
+    const rest = f.rest_s == null ? "" : f.rest_s < 90 ? ` · noch ${Math.max(1, Math.round(f.rest_s))} s` : ` · noch ca. ${Math.round(f.rest_s / 60)} min`;
+    text = `${f.aufgabe}: ${f.erledigt.toLocaleString("de-DE")} / ${f.gesamt.toLocaleString("de-DE")} (${p} %)${rest}`;
+    $("balken_innen").style.width = p + "%";
+  }
+  $("balken").style.display = laeuft && f.gesamt ? "block" : "none";
+  $("status-text").textContent = text;
   $("fehlerbox").style.display = zustand.fehler ? "block" : "none";
   $("fehlerbox").textContent = zustand.fehler || "";
   const log = $("log"), unten = log.scrollTop + log.clientHeight >= log.scrollHeight - 10;
@@ -611,6 +623,7 @@ function passtFilter(b) {
   if (filter === "aus") return b.status === "aussortiert";
   if (filter === "aehnlich") return b.serie || /Duplikat/.test(b.grund);
   if (["kinder", "freunde", "haus"].includes(filter)) return (b.themen || []).includes(filter);
+  if (filter === "probleme") return !!b.problem;
   return true;
 }
 function karte(b) {
@@ -623,6 +636,7 @@ function karte(b) {
       <span class="badge q-${b.quelle}">${QUELLE[b.quelle] || b.quelle}</span>${b.serie ? `<span class="badge">Serie ${b.serie}</span>` : ""}${b.manuell ? `<span class="badge manuell">manuell</span>` : ""}${b.rueckblick ? `<span class="badge rb ${b.rueckblick.startsWith("kein") ? "leer" : ""}" title="Seite im Jahresrückblick">📖 ${esc(b.rueckblick)}</span>` : ""}
       <br>${esc(b.name.slice(0, 30))} · Note ${b.score ?? "–"}
       ${b.grund ? `<div class="grund">${esc(b.grund)}</div>` : ""}
+      ${b.problem ? `<div class="grund" style="color:#8a5a00">⚠ ${esc(b.problem)}</div>` : ""}
       ${b.art === "foto" ? `<div class="chips">${THEMEN.map(([k, t]) => `<span class="chip ${(b.themen || []).includes(k) ? "an" : ""}" onclick="setzeThema(${b.id}, '${k}')">${t}</span>`).join("")}</div>` : ""}
       ${(b.personen || []).length ? `<div class="hilfe">👤 ${esc(b.personen.join(", "))}</div>` : ""}</div></div>`;
 }
@@ -636,6 +650,9 @@ async function setzeThema(id, thema) {
   window.scrollTo(0, y);
 }
 let initialZugeklappt = false;
+const SEITE = 300, angezeigt = {};
+function anzeigen(k) { return angezeigt[k] || SEITE; }
+function mehrZeigen(k) { angezeigt[k] = anzeigen(k) + SEITE; const y = window.scrollY; zeichnePlan(); window.scrollTo(0, y); }
 function zeichneRueckblick() {
   const ziel = $("gruppen");
   sichtbar = [];
@@ -672,7 +689,9 @@ function zeichnePlan() {
       <div class="gruppe-kopf" onclick="klappen(this.parentElement)"><span class="pfeil">▾</span><h3>${esc(g.name)}</h3>
         <span class="pill ${g.art}">${ART_TEXT[g.art] || g.art}</span>
         <span class="info" id="info${gi}">${kopfInfo(g)}</span></div>
-      <div class="bilder">${zugeklappt.has(schluessel) ? "" : bilder.map(karte).join("")}</div></div>`;
+      <div class="bilder">${zugeklappt.has(schluessel) ? "" : bilder.slice(0, anzeigen(schluessel)).map(karte).join("")}</div>
+      ${!zugeklappt.has(schluessel) && bilder.length > anzeigen(schluessel)
+        ? `<div class="aktionen"><button class="btn" onclick="mehrZeigen('${esc(schluessel)}')">weitere ${Math.min(SEITE, bilder.length - anzeigen(schluessel))} von ${bilder.length - anzeigen(schluessel)} anzeigen</button></div>` : ""}</div>`;
   }).join("") || `<div class="leer">Keine Bilder für diesen Filter.</div>`;
   const s = plan.statistik;
   $("statleiste").textContent = `${s.dateien} Dateien · ${s.behalten} behalten · ${s.favoriten} Favoriten`;

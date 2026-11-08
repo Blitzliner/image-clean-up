@@ -124,6 +124,9 @@ STANDARD: dict = {
     # Technisches
     "analyse": {
         "prozesse": 0,  # 0 = automatisch (Anzahl CPU-Kerne - 1)
+        # Größte erlaubte Bildgröße in Megapixeln (Panoramas haben oft 100-200 MP;
+        # Pillow warnt sonst schon ab 89 MP vor "Decompression Bombs")
+        "max_megapixel": 600,
         "cache_datei": ".fotosort_cache.json",
         "modell_ordner": "models",
     },

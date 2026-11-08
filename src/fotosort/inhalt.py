@@ -15,6 +15,7 @@ Du kannst sie hier ergänzen – mehr Beschreibungen = feinere Erkennung.
 """
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import numpy as np
@@ -169,7 +170,10 @@ def erkenne_inhalte(items: list[dict], cfg: dict) -> bool:
 
     offen = [i for i in fotos if i["sha1"] not in vektoren]
     if offen:
-        print(f"Erkenne Bildinhalte von {len(offen)} Fotos ...")
+        from .fortschritt import Fortschritt
+
+        fortschritt = Fortschritt("Bildinhalte erkennen", len(offen), "Bilder")
+        letzte_sicherung = time.time()
         for start in range(0, len(offen), 32):
             teil = offen[start:start + 32]
             bilder = []
@@ -178,11 +182,21 @@ def erkenne_inhalte(items: list[dict], cfg: dict) -> bool:
                     bilder.append(_lade(i["pfad"]))
                 except Exception:
                     bilder.append(Image.new("RGB", (224, 224)))
-            for i, v in zip(teil, bild_modell.embed(bilder, batch_size=16)):
-                vektoren[i["sha1"]] = _norm(np.asarray(v, dtype=np.float32)).astype(np.float16)
-            print(f"  {min(start + 32, len(offen))}/{len(offen)}")
+            try:
+                for i, v in zip(teil, bild_modell.embed(bilder, batch_size=16)):
+                    vektoren[i["sha1"]] = _norm(np.asarray(v, dtype=np.float32)).astype(np.float16)
+            except Exception as fehler:  # einzelner Stapel kaputt -> weiter
+                print(f"  Hinweis: Inhaltserkennung für {len(teil)} Bilder fehlgeschlagen ({fehler})")
+            fortschritt.schritt(len(teil))
+            if time.time() - letzte_sicherung > 120:  # Zwischenstand sichern
+                np.savez_compressed(speicher, **vektoren)
+                letzte_sicherung = time.time()
         np.savez_compressed(speicher, **vektoren)
+        fortschritt.fertig()
 
+    fotos = [i for i in fotos if i["sha1"] in vektoren]
+    if not fotos:
+        return False
     matrix = _norm(np.stack([vektoren[i["sha1"]].astype(np.float32) for i in fotos]))
     namen, texte = _text_vektoren(text_modell, KATEGORIEN)
     for i, w in zip(fotos, _wahrscheinlichkeiten(matrix, namen, texte)):

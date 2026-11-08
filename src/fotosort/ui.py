@@ -30,7 +30,7 @@ from urllib.parse import parse_qs, urlparse
 import yaml
 from PIL import Image, ImageOps
 
-from . import personen, planung, themen
+from . import fortschritt, personen, planung, themen
 from .ablage import ablegen
 from .config import lade_config
 from .ereignisse import lade_ereignisse, speichere_ereignisse
@@ -271,6 +271,7 @@ def plan_als_json(z: Zustand) -> dict:
             "pfad": i["pfad"], "gesichter": len(i.get("gesichter", [])),
             "themen": i.get("themen", []), "personen": i.get("personen", []),
             "kopien": len(i.get("kopien", [])),
+            "problem": i.get("fehler") or "; ".join(i.get("hinweise", [])),
         })
     liste = sorted(gruppen.values(),
                    key=lambda g: (g["jahr"], not g["gruppe"][:4].isdigit(), g["gruppe"]))
@@ -332,7 +333,8 @@ def baue_handler(z: Zustand):
                 return self._bytes(HTML_DATEI.read_bytes(), "text/html; charset=utf-8", cache=False)
             if url.path == "/api/zustand":
                 return self._json({
-                    "auftrag": z.auftrag, "fehler": z.fehler, "version": z.version, "log": list(z.log)[-150:],
+                    "auftrag": z.auftrag, "fehler": z.fehler, "version": z.version,
+                    "fortschritt": fortschritt.stand(), "log": list(z.log)[-150:],
                     "hat_plan": bool(z.items), "statistik": z.statistik,
                     "config": config_fuer_ui(z.cfg), "config_pfad": str(z.config_pfad),
                     "jahre": sorted({i["jahr"] for i in z.items}), "pdfs": z.pdfs,
@@ -493,7 +495,17 @@ def baue_handler(z: Zustand):
 
 
 def starte_ui(config_pfad: str = "config.yaml", port: int = 8765) -> None:
+    import warnings
+
     z = Zustand(config_pfad)
+
+    # Python-Warnungen (z.B. von Pillow) auch im Protokoll der Oberfläche zeigen
+    def warnung_ins_protokoll(nachricht, kategorie, datei, zeile, file=None, line=None):
+        text = f"Hinweis: {str(nachricht)[:200]}"
+        if not z.log or z.log[-1] != text:
+            z.log.append(text)
+        print(text)
+    warnings.showwarning = warnung_ins_protokoll
     server = ThreadingHTTPServer(("127.0.0.1", port), baue_handler(z))
     adresse = f"http://127.0.0.1:{port}/"
     print(f"Oberfläche läuft auf {adresse}  (Beenden: Strg+C)")

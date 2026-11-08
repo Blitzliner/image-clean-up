@@ -766,9 +766,15 @@ def _erzeuge(seiten: list[dict], cfg: dict, ziel_stamm: Path, titel: str, untert
         _vorbereiten(b, modell, kante)
     _titelseite(ausgaben, titel, untertitel, jahr_text, auswahl, cfg)
 
+    from .fortschritt import Fortschritt
+
+    # nur für den Balken in der Oberfläche – die Seiten werden ohnehin einzeln gemeldet
+    fortschritt = Fortschritt(f"{titel}: Seiten", 0, "Seiten", intervall=1e9)
+    fortschritt.gesamt = len(seiten)
     for nr, seite in enumerate(seiten, start=1):
         teil = f" [{seite['teil']}]" if seite["teil"] else ""
         print(f"  Seite {nr}/{len(seiten)}: {seite['titel']}{teil} ({len(seite['bilder'])} Bilder)")
+        fortschritt.schritt()
         plaetze = layout_seite(seite, cfg, modell, kante)
         for a in ausgaben:
             a.neue_seite()
@@ -780,6 +786,8 @@ def _erzeuge(seiten: list[dict], cfg: dict, ziel_stamm: Path, titel: str, untert
             if b not in auswahl:
                 b.pop("_bild", None)  # Speicher freigeben
 
+    fortschritt.fertig()
+    print("  Speichere Dateien …")
     dateien = []
     for a, endung in zip(ausgaben, (".pdf", ".pptx")):
         pfad = ziel_stamm.with_suffix(endung)

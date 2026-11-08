@@ -46,9 +46,19 @@ def erstelle_vorschau(items: list[dict], gruppen: list[dict], statistik: dict,
     ordner = Path(ordner)
     thumbs = ordner / "thumbs"
     thumbs.mkdir(parents=True, exist_ok=True)
+    from .fortschritt import Fortschritt
+
     print(f"Erstelle Vorschau in {ordner} ...")
+    fortschritt = Fortschritt("Vorschaubilder", len(items), "Bilder")
+
+    def eins(i):
+        ergebnis = _vorschaubild(i, thumbs)
+        fortschritt.schritt()
+        return ergebnis
+
     with ThreadPoolExecutor() as pool:
-        bilder = list(pool.map(lambda i: _vorschaubild(i, thumbs), items))
+        bilder = list(pool.map(eins, items))
+    fortschritt.fertig()
 
     # Plan zusätzlich als CSV (für Excel)
     with open(ordner / "plan.csv", "w", newline="", encoding="utf-8-sig") as f:

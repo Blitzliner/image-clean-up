@@ -13,7 +13,11 @@ Ohne Modelle läuft alles weiter, nur ohne Gesichter.
 from __future__ import annotations
 
 import base64
+import os
 import urllib.request
+
+# Technische OpenCV-Meldungen (z.B. "WARN ... net_impl_backend") unterdrücken
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 from pathlib import Path
 
 import numpy as np
