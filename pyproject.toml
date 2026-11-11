@@ -8,6 +8,7 @@ dependencies = [
     "fastembed>=0.5",
     "fpdf2>=2.7",
     "imagehash>=4.3",
+    "imageio-ffmpeg>=0.5",
     "numpy>=2.0",
     "opencv-python-headless>=4.8",
     "piexif>=1.1.3",

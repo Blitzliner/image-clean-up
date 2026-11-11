@@ -62,10 +62,25 @@ STANDARD: dict = {
     # EXIF (Datum, GPS, Kamera) bleibt erhalten. Die Originale in den
     # Quellordnern bleiben bei "kopieren" unverändert.
     "ablage": {
-        "verkleinern": False,
+        # --- Fotos ---
+        "verkleinern": False,  # Fotos über max_megapixel verkleinern
         "max_megapixel": 24,  # z.B. 24 MP = ca. 6000 x 4000 Pixel
+        "neu_komprimieren": False,  # auch kleinere JPEGs neu speichern (nur wenn >= 15 % kleiner)
         "jpeg_qualitaet": 90,  # 85-92 = kaum sichtbarer Unterschied
+        # --- Videos ---
+        "videos_komprimieren": False,
+        "video_codec": "hevc",  # "hevc" (H.265, halb so groß) oder "h264" (maximal kompatibel)
+        "video_max_hoehe": 1080,  # kürzere Bildseite begrenzen (1080 = Full HD, 720 = HD)
+        "video_qualitaet": 26,  # CRF: kleiner = bessere Qualität/größer (22-30 sinnvoll)
+        "video_hardware": "auto",  # "auto" = Grafikkarte nutzen, falls möglich; "aus" = nur Prozessor
+        # --- Themen-Ordner (Kinder, Mit Freunden, Haus) ---
+        # "hardlink" = belegt keinen zusätzlichen Platz (gleiches Laufwerk, NTFS),
+        # sonst automatisch Kopie; "kopie" = immer echte Kopie; "aus" = keine Themen-Ordner-Dateien
+        "themen_kopien": "hardlink",
     },
+    # Videos werden bisher nicht inhaltlich bewertet -> standardmäßig nie aussortieren
+    # (auch keine Duplikate). Auf true setzen, um doppelte Videos auszusortieren.
+    "videos_aussortieren": False,
     # Wohnort: "auto" (häufigster GPS-Ort) oder {lat: 50.1, lon: 7.5}
     "zuhause": "auto",
     # Automatische Reise-/Ausflugserkennung über GPS

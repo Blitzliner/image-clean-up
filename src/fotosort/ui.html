@@ -129,6 +129,30 @@
   #protokoll .kopf .letzte { color: #b6ada2; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; font-family: Consolas, monospace; }
   #log { padding: 0 16px 10px; height: 200px; overflow: auto; white-space: pre-wrap; }
   .hinweis { background: var(--accent-soft); border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; }
+  /* Ereignisse */
+  .ev { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+  .ev.ignoriert { opacity: .7; } .ev.manuell-gruppe { border-left: 4px solid #a57ee0; }
+  .ev .felder { display: grid; grid-template-columns: 2.2fr 1.1fr 1.1fr .8fr .8fr .6fr 1.6fr auto; gap: 8px; align-items: end; }
+  .ev .felder label { font-size: 11.5px; margin-bottom: 2px; }
+  .ev .haken { display: flex; gap: 14px; align-items: center; font-size: 13px; margin-top: 8px; flex-wrap: wrap; }
+  .ev .haken label { display: flex; gap: 5px; align-items: center; color: var(--ink); font-size: 13px; margin: 0; }
+  .ev .ziel { font-size: 13.5px; margin-top: 8px; } .ev .ziel code { background: #f3efe8; padding: 1px 6px; border-radius: 4px; }
+  .mini { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .mini img { width: 112px; height: 84px; object-fit: cover; border-radius: 6px; background: #eee; cursor: zoom-in; }
+  .tage { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+  .tag { border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; font-size: 12px; cursor: pointer; background: #f8f5ef; user-select: none; }
+  .tag small { color: var(--muted); margin-left: 3px; }
+  .tag.aus { background: #fff; color: #b7aea3; text-decoration: line-through; border-style: dashed; }
+  .tag.leer small { color: #c9c0b5; }
+  .ev.teilen .tag { border-color: var(--accent); } .ev.teilen .tag:hover { background: var(--accent); color: #fff; }
+  .entwurf { font-size: 12.5px; color: var(--muted); }
+  #lasso { position: fixed; border: 2px solid #2f6fd6; background: #2f6fd622; z-index: 45; pointer-events: none; display: none; border-radius: 3px; }
+  #gruppen { user-select: none; }
+  .bk .vid-zeichen { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); font-size: 26px; color: #fff;
+                     text-shadow: 0 1px 6px #000a; pointer-events: none; }
+  .gruppe-kopf .waehl-alle { margin-left: auto; }
+  #toast { position: fixed; top: 70px; right: 24px; background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px;
+           z-index: 60; display: none; box-shadow: 0 4px 16px #0004; font-size: 14px; }
   .fehlerbox { background: var(--bad-soft); color: var(--bad); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: none; }
 </style>
 </head>
@@ -142,6 +166,7 @@
     <button data-tab="pruefen"><b>4</b>Bilder prüfen</button>
     <button data-tab="ablegen"><b>5</b>Ablegen &amp; Rückblick</button>
   </nav>
+  <button class="btn klein" style="margin-left:18px" onclick="zwischenstand()" title="Alle Eingaben (auch noch nicht übernommene) und Einstellungen sichern – z.B. um morgen weiterzumachen">💾 Zwischenstand speichern</button>
   <div id="status"><div id="balken" title=""><div id="balken_innen"></div></div><span class="punkt" id="punkt"></span><span id="status-text">bereit</span></div>
 </header>
 
@@ -179,6 +204,38 @@
           <label><input type="radio" name="modus" value="kopieren"> kopieren (Originale bleiben – empfohlen)</label>
           <label><input type="radio" name="modus" value="verschieben"> verschieben</label>
         </div>
+      </div>
+    </div>
+
+    <div class="karte">
+      <h3>Speicherplatz sparen (Bild- &amp; Videoqualität)</h3>
+      <p class="hilfe" style="margin-top:-6px"><b>Verschieben</b> auf demselben Laufwerk braucht keinen freien Platz (Dateien werden nur umbenannt).
+        Beim Verschieben auf das NAS wird Datei für Datei kopiert und das Original danach gelöscht – Platz braucht dann nur das NAS.
+        Komprimieren geht <b>beim Ablegen</b> (Originale bleiben bei „kopieren“ unberührt) oder <b>als erster Schritt</b> direkt in den Quellordnern.</p>
+      <div class="raster">
+        <div><label>Alle JPEG-Fotos neu komprimieren</label>
+          <select id="ablage.neu_komprimieren"><option value="false">nein</option><option value="true">ja – mit der JPEG-Qualität oben</option></select>
+          <div class="hilfe">Nur wenn die Datei dadurch mind. 15 % kleiner wird.</div></div>
+        <div><label>Videos komprimieren</label>
+          <select id="ablage.videos_komprimieren"><option value="false">nein – Originale</option><option value="true">ja – deutlich kleiner</option></select>
+          <div class="hilfe">Handyvideos werden meist 50–80 % kleiner, Datum bleibt erhalten.</div></div>
+        <div><label>Videoformat</label>
+          <select id="ablage.video_codec"><option value="hevc">H.265 / HEVC (MP4) – modern, halb so groß</option><option value="h264">H.264 (MP4) – läuft wirklich überall</option></select>
+          <div class="hilfe">HEVC läuft auf iPhone, Android, Mac; unter Windows ggf. „HEVC-Videoerweiterungen“ oder VLC.</div></div>
+        <div><label>Videos höchstens</label>
+          <select id="ablage.video_max_hoehe"><option value="720">720p</option><option value="1080">1080p (Full HD)</option><option value="1440">1440p</option><option value="2160">2160p (4K, kaum Ersparnis)</option></select></div>
+        <div><label>Videoqualität (CRF, 18 = sehr gut … 32 = klein)</label><input type="number" min="16" max="36" id="ablage.video_qualitaet">
+          <div class="hilfe">26 ist für Handyvideos kaum vom Original zu unterscheiden.</div></div>
+        <div><label>Grafikkarte zum Umwandeln</label>
+          <select id="ablage.video_hardware"><option value="auto">nutzen, falls vorhanden (schneller)</option><option value="aus">nein – nur Prozessor (kleinere Dateien)</option></select></div>
+        <div><label>Kinder/Freunde-Ordner</label>
+          <select id="ablage.themen_kopien"><option value="hardlink">Verknüpfung (kostet keinen Platz)</option><option value="kopie">echte Kopie</option><option value="aus">keine Themen-Ordner anlegen</option></select>
+          <div class="hilfe">Verknüpfungen (Hardlinks) gehen auf NTFS-Laufwerken; sonst wird automatisch kopiert.</div></div>
+      </div>
+      <div class="aktionen">
+        <button class="btn" onclick="komprimierenSchaetzen()">Ersparnis schätzen</button>
+        <button class="btn" onclick="quelleKomprimieren()" title="Ersetzt die Originale in den Quellordnern durch kleinere Fassungen">⚠ Quellordner jetzt komprimieren (erster Schritt)</button>
+        <span class="hilfe" id="kompr_info">Erst „Speichern &amp; analysieren“, dann ist eine Schätzung möglich.</span>
       </div>
     </div>
 
@@ -258,6 +315,14 @@
       </div>
     </div>
 
+    <div class="karte">
+      <h3>Zwischenstände</h3>
+      <p class="hilfe" style="margin-top:-6px">Vor jeder größeren Aktion, beim Programmstart und mit „💾 Zwischenstand speichern“ werden Einstellungen,
+        Ereignisse, Personen, deine manuellen Änderungen und noch nicht übernommene Eingaben gesichert (Ordner <code>sicherungen</code>, die 40 neuesten).</p>
+      <div class="zeile" style="max-width:640px"><select id="sicherungen"></select>
+        <button class="btn" onclick="sicherungLaden()">zurückholen</button><button class="btn klein" onclick="ladeSicherungen()">↻</button></div>
+    </div>
+
     <div class="aktionen">
       <button class="btn haupt" onclick="speichern(true)">Speichern &amp; analysieren</button>
       <button class="btn" onclick="speichern(false)">Nur speichern</button>
@@ -277,20 +342,22 @@
       <div id="auto_reisen" class="leer">Noch nicht analysiert.</div>
     </div>
     <div class="karte">
-      <h3>Deine Ereignisse</h3>
-      <p class="hilfe" style="margin-top:-6px">Ohne Datum, nur mit Ort: jeder Besuch wird ein eigener Ordner (z.B. Bouldern im Frühjahr und Herbst getrennt).
-        Schlüsselwörter passen auf Datei-/Ordnernamen oder Ortsnamen.<br>
-        <b>im Rückblick</b> abgehakt = Ordner bleibt, aber das Ereignis erscheint nicht im Jahresrückblick.
-        <b>kein Ordner</b> = die Fotos werden trotzdem behalten und sortiert, nur eben im Alltag.</p>
-      <table>
-        <thead><tr><th style="width:22%">Name</th><th>von</th><th>bis</th><th>Ort lat</th><th>lon</th><th>Radius km</th><th>Schlüsselwörter</th><th title="eigener Ordner, aber im Jahresrückblick?">im Rückblick</th><th title="kein eigener Ordner – Fotos kommen in den Alltag">kein Ordner</th><th></th></tr></thead>
-        <tbody id="ereignis_tabelle"></tbody>
-      </table>
+      <h3>Deine Ereignisse &amp; Gruppen</h3>
+      <p class="hilfe" style="margin-top:-6px">Bei jedem Ereignis siehst du, <b>in welchen Ordner</b> wie viele Fotos und Videos kommen, dazu 5 Beispielbilder.
+        <b>Tage anklicken</b> = Tag herausnehmen (durchgestrichen; die Bilder kommen dann in den Alltag-Ordner). <b>✂ teilen</b> und dann einen Tag anklicken = ab diesem Tag ein zweites Ereignis.
+        Ohne Datum, nur mit Ort: jeder Besuch wird ein eigener Ordner (z.B. Bouldern im Frühjahr und Herbst getrennt).
+        <b>Gruppe</b> = eigener Ordner ohne Zeitraum – Bilder kommen nur hinein, wenn du sie in „Bilder prüfen“ dorthin verschiebst.</p>
+      <div id="ereignis_entwurf" class="hinweis" style="display:none"></div>
+      <div id="ereignis_liste"></div>
       <div class="aktionen">
-        <button class="btn klein" onclick="ereignisZeile({})">+ Ereignis</button>
+        <button class="btn klein" onclick="ereignisZeile({}, true)">+ Ereignis</button>
+        <button class="btn klein" onclick="ereignisZeile({ manuell: true }, true)">+ Gruppe (ohne Zeitraum)</button>
+        <span class="entwurf" id="ereignis_entwurf_zeit"></span>
       </div>
     </div>
-    <div class="aktionen"><button class="btn haupt" onclick="ereignisseSpeichern()">Speichern &amp; neu einteilen</button></div>
+    <div class="aktionen"><button class="btn haupt" onclick="ereignisseSpeichern()">Speichern &amp; neu einteilen</button>
+      <button class="btn" onclick="zeigeTab('personen')">weiter: Personen →</button>
+      <span class="hilfe">Auch nach „Bilder prüfen“ jederzeit änderbar – deine Sterne und Verschiebungen bleiben erhalten.</span></div>
   </section>
 
   <!-- 3 PERSONEN ---------------------------------------------------------->
@@ -302,9 +369,10 @@
       (z.B. für dasselbe Kind in verschiedenen Altersstufen). Kleinkinder sehen sich für die Erkennung oft ähnlich –
       dann reicht ein gemeinsamer Name wie „Kinder“ mit Rolle Kind.</p>
     <div class="aktionen" style="margin-bottom:12px"><button class="btn haupt" onclick="personenSpeichern()">Speichern &amp; neu zuordnen</button>
+      <span class="entwurf" id="personen_entwurf"></span>
       <span class="hilfe">Name ist freiwillig – nur eine Rolle reicht („Freund 1“ wird dann automatisch vergeben). Gruppen ohne Rolle werden einfach nicht beachtet.</span>
       <button class="btn klein" id="ausgeblendet_knopf" onclick="ausgeblendeteUmschalten()" style="display:none"></button>
-      <button class="btn klein" id="kleine_knopf" onclick="zeigeKleine = !zeigeKleine; ladePersonen()" style="display:none"></button></div>
+      <button class="btn klein" id="kleine_knopf" onclick="kleineUmschalten()" style="display:none"></button></div>
     <div id="personen_liste" class="leer">Noch nicht analysiert.</div>
   </section>
 
@@ -313,7 +381,8 @@
     <h2>Bilder prüfen</h2>
     <p class="unter">Chronologisch je Ordner – Bilder vom selben Moment (egal welches Handy) liegen nebeneinander.
       <b>★</b> = Favorit (kommt in den Rückblick), <b>🗑</b> = aussortieren / zurückholen. Klick aufs Bild = groß ansehen (Tasten: ← → F A Esc).
-      <b>☐</b> oben links = auswählen (Umschalt-Klick für einen Bereich) – dann unten „verschieben nach …“ in ein anderes Ereignis.
+      <b>Mehrere auswählen:</b> mit gedrückter Maus ein Rechteck über die Bilder ziehen (Strg = dazunehmen, Alt = abwählen),
+      ☐ oben links anklicken (Umschalt-Klick = Bereich) oder „alle auswählen“ am Ordner – dann unten verschieben, z.B. in den Alltag oder eine neue Gruppe.
       Ansicht <b>Rückblick</b> zeigt alle Seiten (Ereignisse, Kinder, Freunde, Haus, Sonstiges), wie sie im PDF erscheinen.</p>
     <div class="werkzeug">
       <div class="filter" id="filter">
@@ -359,11 +428,14 @@
   <b id="auswahl_anzahl">0</b> ausgewählt · verschieben nach
   <select id="auswahl_ziel"></select>
   <button class="btn klein" onclick="auswahlVerschieben()">verschieben</button>
+  <button class="btn klein" onclick="auswahlVerschieben('__alltag')" title="aus dem Ereignis herausnehmen">→ Alltag</button>
   <button class="btn klein" onclick="auswahlAlle({ favorit: true, status: 'behalten' })">★ alle</button>
   <button class="btn klein" onclick="auswahlAlle({ status: 'aussortiert' })">🗑 alle</button>
   <button class="btn klein" onclick="auswahlLeeren()">Auswahl aufheben</button>
 </div>
 
+<div id="lasso"></div>
+<div id="toast"></div>
 <div id="lightbox">
   <button id="lb-zu" onclick="lbZu()">×</button>
   <button class="nav" id="lb-links" onclick="lbSchritt(-1)">‹</button>
@@ -458,9 +530,12 @@ async function abfragen() {
   if (!laeuft && zustand.version !== geladeneVersion) { // ein Auftrag ist fertig geworden
     geladeneVersion = zustand.version;
     if (zustand.hat_plan) await ladePlan();
-    if (naechsterTab && !zustand.fehler) { zeigeTab(naechsterTab); window.scrollTo(0, 0); }
+    const tabGewechselt = naechsterTab && !zustand.fehler;
+    if (tabGewechselt) { zeigeTab(naechsterTab); if (naechsterTab !== "ereignisse") window.scrollTo(0, 0); }
     naechsterTab = null;
-    if (document.querySelector("#ereignisse.aktiv")) ladeEreignisse();
+    if (!tabGewechselt && document.querySelector("#ereignisse.aktiv")) ladeEreignisse();
+    if (!tabGewechselt && document.querySelector("#personen.aktiv") && !personenGeaendert) ladePersonen();
+
     zeichneUebersicht();
   }
   clearTimeout(abfrageTimer);
@@ -487,9 +562,10 @@ function zuhauseUmschalten() {
   $("zuhause_fest").style.display = fest ? "flex" : "none";
 }
 const ZAHLFELDER = ["reise.min_entfernung_km","reise.max_luecke_tage","reise.min_fotos","reise.min_vorschlag","pdf.max_seiten_pro_ereignis","pdf.max_beschnitt","ablage.max_megapixel","ablage.jpeg_qualitaet","analyse.max_megapixel","themen.kinder.seiten","themen.freunde.seiten","themen.haus.seiten","themen.sonstiges_seiten","serien.behalten","favoriten.anteil","favoriten.max",
-                    "pdf.zoom_staerke","pdf.dpi","pdf.jpeg_qualitaet","pdf.min_sterne"];
-const TEXTFELDER = ["serien.aktion","pdf.titel","pdf.untertitel","aussortieren.staerke","ordner.alltag"];
-const JANEIN = ["ablage.verkleinern", "pdf.bild_datum","pdf.seitenzahlen","pdf.pptx","themen.inhalte_erkennen","themen.kinder.aktiv",
+                    "pdf.zoom_staerke","pdf.dpi","pdf.jpeg_qualitaet","pdf.min_sterne","ablage.video_max_hoehe","ablage.video_qualitaet"];
+const TEXTFELDER = ["serien.aktion","pdf.titel","pdf.untertitel","aussortieren.staerke","ordner.alltag",
+                    "ablage.video_codec","ablage.video_hardware","ablage.themen_kopien"];
+const JANEIN = ["ablage.verkleinern", "ablage.neu_komprimieren", "ablage.videos_komprimieren", "pdf.bild_datum","pdf.seitenzahlen","pdf.pptx","themen.inhalte_erkennen","themen.kinder.aktiv",
                 "themen.freunde.aktiv","themen.haus.aktiv","themen.haus.eigenes_pdf"];
 function fuelleConfig(c) {
   $("quellen").innerHTML = "";
@@ -501,6 +577,7 @@ function fuelleConfig(c) {
   if (fest) { $("zuhause_lat").value = c.zuhause.lat; $("zuhause_lon").value = c.zuhause.lon; }
   zuhauseUmschalten();
   [...ZAHLFELDER, ...TEXTFELDER].forEach((k) => $(k).value = c[k]);
+  if (!$("ablage.video_max_hoehe").value) $("ablage.video_max_hoehe").value = "1080";
   JANEIN.forEach((k) => $(k).value = String(!!c[k]));
 }
 function leseConfig() {
@@ -533,108 +610,359 @@ function abfrageSofort() { clearTimeout(abfrageTimer); abfrageTimer = setTimeout
 // ---------------------------------------------------------------------------
 // 2 Ereignisse
 // ---------------------------------------------------------------------------
+// Ereignisse: Liste mit Beispielbildern, Tagen, Teilen und Entwurf
+let ereignisDaten = { eigene: [], auto: [], pro_tag: {} }, ereignisAltNamen = [], ereignisGeaendert = false, entwurfTimerE = null;
+const WOCHENTAG = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+function isoTag(d) { return d.toISOString().slice(0, 10); }
+function tagePlus(iso, n) { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return isoTag(d); }
+function kurzDatum(iso) { const d = new Date(iso + "T12:00:00Z"); return `${WOCHENTAG[d.getUTCDay()]} ${iso.slice(8, 10)}.${iso.slice(5, 7)}.`; }
+function miniBilder(ids) {
+  return ids && ids.length ? `<div class="mini">${ids.map((i) => `<img loading="lazy" src="/thumb/${i}" onclick="lbOeffnen(${i})" title="groß ansehen">`).join("")}</div>` : "";
+}
 async function ladeEreignisse() {
+  await entwuerfeSichern();
   const d = await api("/api/ereignisse");
-  $("ereignis_tabelle").innerHTML = "";
-  d.eigene.forEach(ereignisZeile);
+  ereignisDaten = d;
+  ereignisAltNamen = d.eigene.map((e) => e.name);
+  let liste = d.eigene;
+  const hinweis = $("ereignis_entwurf");
+  hinweis.style.display = "none";
+  if (d.entwurf && Array.isArray(d.entwurf.daten)) {
+    const info = Object.fromEntries(d.eigene.map((e) => [e.name, e.info]));
+    liste = d.entwurf.daten.map((e) => ({ ...e, info: e.alt_name ? info[e.alt_name] : undefined }));
+    hinweis.style.display = "block";
+    hinweis.innerHTML = `Deine noch nicht übernommenen Änderungen vom ${esc(d.entwurf.zeit)} sind wiederhergestellt –
+      mit „Speichern &amp; neu einteilen“ übernehmen. <button class="btn klein" onclick="entwurfVerwerfen()">Entwurf verwerfen</button>`;
+  }
+  $("ereignis_liste").innerHTML = "";
+  liste.forEach((e) => ereignisZeile(e));
+  ereignisGeaendert = false;
+  zeichneAutoReisen(d);
+}
+function zeichneAutoReisen(d) {
   const box = $("auto_reisen");
   if (!zustand.hat_plan) { box.className = "leer"; box.textContent = "Noch nicht analysiert."; return; }
   if (!d.auto.length) { box.className = "leer"; box.textContent = "Keine weiteren Reisen erkannt (oder alle bereits übernommen)."; return; }
   box.className = "";
   autoListe = d.auto;
   box.innerHTML = `<table><thead><tr><th>Zeitraum</th><th>Art</th><th>erkannt über</th><th>Ort</th><th class="zahl">Dateien</th><th style="width:30%">Name</th><th></th></tr></thead><tbody>` +
-    d.auto.map((r, i) => `<tr><td>${new Date(r.von).toLocaleDateString("de-DE")}${r.bis !== r.von ? " – " + new Date(r.bis).toLocaleDateString("de-DE") : ""}</td>
+    d.auto.map((r, i) => `<tr id="autozeile_${i}"><td>${new Date(r.von).toLocaleDateString("de-DE")}${r.bis !== r.von ? " – " + new Date(r.bis).toLocaleDateString("de-DE") : ""}</td>
       <td><span class="pill ${r.automatisch ? "ereignis" : ""}">${r.automatisch ? "automatisch" : "Vorschlag"}</span></td>
       <td>${esc(r.quelle)}</td><td>${esc(r.ort)}</td><td class="zahl">${r.anzahl}</td>
       <td><input type="text" id="auto_${i}" value="${esc(r.name)}"></td>
       <td><button class="btn klein" onclick="autoUebernehmen(${i}, false)">übernehmen</button>
-          <button class="btn klein" onclick="autoUebernehmen(${i}, true)">kein Ordner</button></td></tr>`).join("") +
+          <button class="btn klein" onclick="autoUebernehmen(${i}, true)">kein Ordner</button></td></tr>
+      <tr id="autobilder_${i}"><td colspan="7" style="border-bottom:1px solid var(--line);padding-bottom:10px">${miniBilder((r.info || {}).beispiele)}</td></tr>`).join("") +
     `</tbody></table><div class="aktionen"><button class="btn klein" onclick="alleUebernehmen()">alle übernehmen</button>
-     <span class="hilfe">Übernommene stehen unten in „Deine Ereignisse“ (Name/Datum dort änderbar) – danach „Speichern &amp; neu einteilen“.</span></div>`;
+     <span class="hilfe">Übernommene stehen unten in „Deine Ereignisse“ (Name, Zeitraum und Tage dort änderbar) – danach „Speichern &amp; neu einteilen“.</span></div>`;
 }
-function ereignisZeile(e) {
-  const tr = document.createElement("tr");
+function ereignisZeile(e, neu) {
+  const div = document.createElement("div");
   const ort = e.ort || {};
-  tr.innerHTML = `<td><input type="text" class="e_name" value="${esc(e.name)}"></td>
-    <td><input type="date" class="e_von" value="${esc(e.von || "")}"></td>
-    <td><input type="date" class="e_bis" value="${esc(e.bis || "")}"></td>
-    <td><input type="number" step="0.001" class="e_lat" value="${ort.lat ?? ""}"></td>
-    <td><input type="number" step="0.001" class="e_lon" value="${ort.lon ?? ""}"></td>
-    <td><input type="number" step="0.5" class="e_rad" value="${ort.radius_km ?? ""}"></td>
-    <td><input type="text" class="e_wort" value="${esc((e.schluesselwoerter || []).join(", "))}"></td>
-    <td style="text-align:center"><input type="checkbox" class="e_rb" ${e.im_rueckblick === false ? "" : "checked"}></td>
-    <td style="text-align:center"><input type="checkbox" class="e_ign" ${e.ignorieren ? "checked" : ""}></td>
-    <td><button class="btn klein" onclick="this.closest('tr').remove()">✕</button></td>`;
-  $("ereignis_tabelle").appendChild(tr);
+  div.className = "ev" + (e.manuell ? " manuell-gruppe" : "") + (e.ignorieren ? " ignoriert" : "");
+  div.dataset.alt = e.alt_name !== undefined ? e.alt_name : (neu ? "" : e.name || "");
+  div.dataset.manuell = e.manuell ? "1" : "";
+  div.dataset.ohne = JSON.stringify(e.ohne_tage || []);
+  const felder = e.manuell
+    ? `<div class="felder" style="grid-template-columns: 2.2fr 5fr auto"><div><label>Name der Gruppe (Ordner)</label><input type="text" class="e_name" value="${esc(e.name)}"></div>
+         <div class="hilfe" style="align-self:center">Gruppe ohne Zeitraum – enthält nur Bilder, die du in „Bilder prüfen“ hierher verschiebst.</div>
+         <div><button class="btn klein" title="Gruppe löschen – ihre Bilder werden wieder automatisch eingeteilt" onclick="ereignisEntfernen(this)">✕</button></div></div>`
+    : `<div class="felder">
+        <div><label>Name</label><input type="text" class="e_name" value="${esc(e.name)}"></div>
+        <div><label>von</label><input type="date" class="e_von" value="${esc(e.von || "")}"></div>
+        <div><label>bis</label><input type="date" class="e_bis" value="${esc(e.bis || "")}"></div>
+        <div><label>Ort lat</label><input type="number" step="0.001" class="e_lat" value="${ort.lat ?? ""}"></div>
+        <div><label>lon</label><input type="number" step="0.001" class="e_lon" value="${ort.lon ?? ""}"></div>
+        <div><label>Radius km</label><input type="number" step="0.5" class="e_rad" value="${ort.radius_km ?? ""}"></div>
+        <div><label>Schlüsselwörter</label><input type="text" class="e_wort" value="${esc((e.schluesselwoerter || []).join(", "))}"></div>
+        <div><button class="btn klein" title="Ereignis löschen" onclick="ereignisEntfernen(this)">✕</button></div></div>
+      <div class="haken">
+        <label title="eigener Ordner, aber nicht im Jahresrückblick"><input type="checkbox" class="e_rb" ${e.im_rueckblick === false ? "" : "checked"}> im Rückblick</label>
+        <label title="kein eigener Ordner – Fotos kommen in den Alltag"><input type="checkbox" class="e_ign" ${e.ignorieren ? "checked" : ""}> kein eigener Ordner</label>
+        <button class="btn klein e_teilen" onclick="teilenUmschalten(this)" title="Danach einen Tag anklicken: ab diesem Tag beginnt ein neues Ereignis">✂ teilen</button>
+      </div>`;
+  div.innerHTML = felder + `<div class="ziel"></div><div class="tage"></div>${miniBilder((e.info || {}).beispiele)}`;
+  div._info = e.info;
+  $("ereignis_liste").appendChild(div);
+  zeichneZiel(div);
+  zeichneTage(div);
+  if (neu) { div.querySelector(".e_name").focus(); ereignisAenderung(); }
+}
+function zeichneZiel(div) {
+  const info = div._info, ziel = div.querySelector(".ziel");
+  const ign = div.querySelector(".e_ign")?.checked;
+  if (ign) { ziel.innerHTML = "→ kein eigener Ordner: die Bilder werden normal behalten und kommen in den Alltag-Ordner."; return; }
+  if (!info) { ziel.innerHTML = `<span class="hilfe">Neu oder geändert – nach „Speichern &amp; neu einteilen“ steht hier, welche Bilder in welchen Ordner kommen.</span>`; return; }
+  if (!info.fotos && !info.videos) { ziel.innerHTML = `<span class="hilfe">Noch keine Bilder zugeordnet.</span>`; return; }
+  const ordner = info.ordner.length ? info.ordner.map((o) => `<code>${esc(o)}</code>`).join(", ") : "–";
+  ziel.innerHTML = `→ Ordner ${ordner}: <b>${info.fotos}</b> Fotos, <b>${info.videos}</b> Videos${info.aussortiert ? ` (davon ${info.aussortiert} in „Aussortiert“)` : ""}
+    <button class="btn klein" style="margin-left:8px" onclick="zeigeImPruefen(${esc(JSON.stringify(info.ordner))})">in „Bilder prüfen“ ansehen</button>`;
+}
+function zeichneTage(div) {
+  const box = div.querySelector(".tage");
+  if (!box) return;
+  const von = div.querySelector(".e_von")?.value, bis = div.querySelector(".e_bis")?.value || von;
+  const teilen = div.querySelector(".e_teilen");
+  if (teilen) teilen.style.display = von && bis > von ? "" : "none";
+  if (!von || bis < von) { box.innerHTML = ""; return; }
+  const ohne = new Set(JSON.parse(div.dataset.ohne || "[]"));
+  const tage = [];
+  for (let t = von; t <= bis && tage.length < 120; t = tagePlus(t, 1)) tage.push(t);
+  box.innerHTML = tage.map((t) => {
+    const n = ereignisDaten.pro_tag[t] || 0;
+    return `<span class="tag ${ohne.has(t) ? "aus" : ""} ${n ? "" : "leer"}" data-tag="${t}" title="${ohne.has(t) ? "wieder aufnehmen" : "herausnehmen"}">${kurzDatum(t)}<small>${n}</small></span>`;
+  }).join("");
+}
+document.addEventListener("click", (ev) => {
+  const tag = ev.target.closest("#ereignis_liste .tag");
+  if (!tag) return;
+  const div = tag.closest(".ev"), t = tag.dataset.tag;
+  if (div.classList.contains("teilen")) return ereignisTeilen(div, t);
+  const ohne = new Set(JSON.parse(div.dataset.ohne || "[]"));
+  ohne.has(t) ? ohne.delete(t) : ohne.add(t);
+  div.dataset.ohne = JSON.stringify([...ohne].sort());
+  div._info = null; zeichneZiel(div); zeichneTage(div); ereignisAenderung();
+});
+function teilenUmschalten(knopf) {
+  const div = knopf.closest(".ev");
+  div.classList.toggle("teilen");
+  knopf.textContent = div.classList.contains("teilen") ? "Tag wählen … (abbrechen)" : "✂ teilen";
+}
+function ereignisTeilen(div, tag) {
+  const von = div.querySelector(".e_von").value, bis = div.querySelector(".e_bis").value || von;
+  div.classList.remove("teilen"); div.querySelector(".e_teilen").textContent = "✂ teilen";
+  if (tag <= von) { alert("Bitte einen Tag nach dem ersten Tag wählen – ab dort beginnt das zweite Ereignis."); return; }
+  const ohne = JSON.parse(div.dataset.ohne || "[]");
+  const e = leseEreignis(div);
+  div.querySelector(".e_bis").value = tagePlus(tag, -1);
+  div.dataset.ohne = JSON.stringify(ohne.filter((t) => t < tag));
+  div._info = null; zeichneZiel(div); zeichneTage(div);
+  const zweites = { ...e, name: e.name + " Teil 2", von: tag, bis, ohne_tage: ohne.filter((t) => t >= tag), alt_name: "" };
+  ereignisZeile(zweites, true);
+  div.after($("ereignis_liste").lastElementChild);
+}
+function ereignisEntfernen(knopf) {
+  const div = knopf.closest(".ev");
+  const name = div.querySelector(".e_name").value;
+  if (div.dataset.alt && !confirm(`„${name}“ löschen? Die Bilder bleiben erhalten und werden wieder automatisch eingeteilt.`)) return;
+  div.remove(); ereignisAenderung();
+}
+function leseEreignis(div) {
+  const q = (k) => (div.querySelector(k)?.value || "").trim();
+  const e = { name: q(".e_name"), alt_name: div.dataset.alt || "" };
+  if (div.dataset.manuell) { e.manuell = true; return e; }
+  e.von = q(".e_von"); e.bis = q(".e_bis") || e.von;
+  if (q(".e_lat") && q(".e_lon")) e.ort = { lat: +q(".e_lat"), lon: +q(".e_lon"), radius_km: +(q(".e_rad") || 5) };
+  const w = q(".e_wort"); if (w) e.schluesselwoerter = w.split(",").map((s) => s.trim()).filter(Boolean);
+  if (div.querySelector(".e_ign").checked) e.ignorieren = true;
+  if (!div.querySelector(".e_rb").checked) e.im_rueckblick = false;
+  const ohne = JSON.parse(div.dataset.ohne || "[]").filter((t) => e.von && t >= e.von && t <= e.bis);
+  if (ohne.length) e.ohne_tage = ohne;
+  return e;
+}
+function leseEreignisse() { return [...document.querySelectorAll("#ereignis_liste .ev")].map(leseEreignis); }
+// Jede Eingabe merkt sich der Entwurf (gespeichert nach kurzer Pause)
+document.addEventListener("input", (ev) => {
+  const div = ev.target.closest("#ereignis_liste .ev");
+  if (!div) return;
+  if (ev.target.matches(".e_von, .e_bis")) { div._info = null; zeichneTage(div); zeichneZiel(div); }
+  if (ev.target.matches(".e_ign")) { div.classList.toggle("ignoriert", ev.target.checked); zeichneZiel(div); }
+  ereignisAenderung();
+});
+function ereignisAenderung() {
+  ereignisGeaendert = true;
+  $("ereignis_entwurf_zeit").textContent = "nicht gespeichert …";
+  clearTimeout(entwurfTimerE); entwurfTimerE = setTimeout(entwuerfeSichern, 1000);
+}
+async function entwurfVerwerfen() {
+  await api("/api/entwurf", { teil: "ereignisse", daten: null });
+  ereignisGeaendert = false; ladeEreignisse();
 }
 let autoListe = [];
 function autoUebernehmen(i, ignorieren) {
   const r = autoListe[i], feld = $("auto_" + i);
   if (!feld) return;
-  ereignisZeile({ name: feld.value || r.name, von: r.von, bis: r.bis, ignorieren });
-  feld.closest("tr").remove();
+  ereignisZeile({ name: feld.value || r.name, von: r.von, bis: r.bis, ignorieren }, true);
+  feld.closest("tr").remove(); $("autobilder_" + i)?.remove();
 }
 function alleUebernehmen() { autoListe.forEach((_, i) => autoUebernehmen(i, false)); }
 async function ereignisseSpeichern() {
-  const eigene = [...document.querySelectorAll("#ereignis_tabelle tr")].map((tr) => {
-    const q = (k) => tr.querySelector(k).value.trim();
-    const e = { name: q(".e_name"), von: q(".e_von"), bis: q(".e_bis") };
-    if (q(".e_lat") && q(".e_lon")) e.ort = { lat: +q(".e_lat"), lon: +q(".e_lon"), radius_km: +(q(".e_rad") || 5) };
-    const w = q(".e_wort"); if (w) e.schluesselwoerter = w.split(",").map((s) => s.trim()).filter(Boolean);
-    if (tr.querySelector(".e_ign").checked) e.ignorieren = true;
-    if (!tr.querySelector(".e_rb").checked) e.im_rueckblick = false;
-    return e;
-  }).filter((e) => e.name);
-  const ohneAlles = eigene.find((e) => !e.von && !e.ort && !e.schluesselwoerter);
+  const eigene = leseEreignisse().filter((e) => e.name);
+  const ohneAlles = eigene.find((e) => !e.manuell && !e.von && !e.ort && !e.schluesselwoerter);
   if (ohneAlles) { alert(`„${ohneAlles.name}“ braucht ein Datum, einen Ort oder Schlüsselwörter.`); return; }
-  naechsterTab = "personen"; await api("/api/ereignisse", { eigene, neu_planen: true }); abfrageSofort();
+  const namen = eigene.map((e) => e.name), doppelt = namen.find((n, i) => namen.indexOf(n) !== i);
+  if (doppelt) { alert(`Der Name „${doppelt}“ kommt zweimal vor – bitte unterschiedliche Namen vergeben.`); return; }
+  const bleiben = new Set(eigene.map((e) => e.alt_name).filter(Boolean));
+  const geloescht = ereignisAltNamen.filter((n) => !bleiben.has(n));
+  clearTimeout(entwurfTimerE); ereignisGeaendert = false;
+  naechsterTab = "ereignisse";
+  await api("/api/ereignisse", { eigene, geloescht, neu_planen: true });
+  $("ereignis_entwurf_zeit").textContent = "";
+  abfrageSofort();
+}
+function zeigeImPruefen(ordner) {
+  zeigeTab("pruefen");
+  if (filter !== "alle") document.querySelector('#filter button[data-f="alle"]').click();
+  const g = [...document.querySelectorAll("#gruppen .gruppe")].find((el) => ordner.includes(el.dataset.k));
+  if (g) { if (g.classList.contains("zu")) klappen(g); setTimeout(() => document.querySelector(`[data-k="${CSS.escape(g.dataset.k)}"]`)?.scrollIntoView({ behavior: "smooth" }), 50); }
 }
 
 // ---------------------------------------------------------------------------
-// Personen
+// Entwürfe (nicht übernommene Eingaben) & Zwischenstände
 // ---------------------------------------------------------------------------
-let personenDaten = { personen: [], rollen: [] };
+async function entwuerfeSichern() {
+  clearTimeout(entwurfTimerE); clearTimeout(entwurfTimerP);
+  const auftraege = [];
+  if (ereignisGeaendert && $("ereignis_liste").children.length + ereignisAltNamen.length) {
+    ereignisGeaendert = false;
+    auftraege.push(api("/api/entwurf", { teil: "ereignisse", daten: leseEreignisse() })
+      .then((r) => $("ereignis_entwurf_zeit").textContent = `Entwurf automatisch gesichert (${r.zeit}) – noch nicht übernommen`));
+  }
+  if (personenGeaendert) {
+    merkePersonen(); personenGeaendert = false;
+    auftraege.push(api("/api/entwurf", { teil: "personen", daten: personenEntwurf })
+      .then((r) => $("personen_entwurf").textContent = `Entwurf automatisch gesichert (${r.zeit}) – noch nicht übernommen`));
+  }
+  await Promise.all(auftraege);
+}
+window.addEventListener("beforeunload", () => {
+  // Beim Schließen/Neuladen offene Eingaben noch schnell mitschicken
+  const senden = (teil, daten) => navigator.sendBeacon("/api/entwurf", new Blob([JSON.stringify({ teil, daten })], { type: "application/json" }));
+  if (ereignisGeaendert) senden("ereignisse", leseEreignisse());
+  if (personenGeaendert) { merkePersonen(); senden("personen", personenEntwurf); }
+});
+function toast(text) {
+  const t = $("toast"); t.textContent = text; t.style.display = "block";
+  clearTimeout(t._timer); t._timer = setTimeout(() => t.style.display = "none", 3500);
+}
+async function zwischenstand() {
+  ereignisGeaendert = ereignisGeaendert || !!document.querySelector("#ereignisse.aktiv");
+  await entwuerfeSichern();
+  const r = await api("/api/sichern", {});
+  toast(r.name ? "💾 Zwischenstand gespeichert: " + r.name : "Noch nichts zu sichern.");
+  ladeSicherungen();
+}
+async function ladeSicherungen() {
+  const d = await api("/api/sicherungen");
+  $("sicherungen").innerHTML = d.sicherungen.length
+    ? d.sicherungen.map((s) => `<option value="${esc(s.name)}">${esc(s.name.replace(/_/, " ").replace(/^(\d+)-(\d+)-(\d+) (\d+)-(\d+)-(\d+)_?/, "$3.$2.$1 $4:$5 · "))} (${s.dateien.length} Dateien)</option>`).join("")
+    : `<option value="">noch keine Sicherungen</option>`;
+}
+async function sicherungLaden() {
+  const name = $("sicherungen").value;
+  if (!name) return;
+  if (!confirm(`Stand „${name}“ zurückholen? Der jetzige Stand wird vorher selbst noch gesichert.`)) return;
+  const r = await api("/api/wiederherstellen", { name });
+  if (!r.ok) { alert(r.fehler || "Nicht möglich"); return; }
+  configGeladen = false; toast("Stand wird zurückgeholt …"); abfrageSofort();
+}
+
+// ---------------------------------------------------------------------------
+// Speicherplatz: Ersparnis schätzen & Quellordner komprimieren
+// ---------------------------------------------------------------------------
+function groesseText(d) { return d.ersparnis_mb >= 1000 ? String(d.ersparnis_gb).replace(".", ",") + " GB" : (d.ersparnis_mb || 0) + " MB"; }
+async function komprimierenSchaetzen() {
+  await api("/api/config", leseConfig());
+  const d = await api("/api/komprimieren_schaetzen");
+  if (!d.hat_plan) { $("kompr_info").textContent = "Erst „Speichern & analysieren“."; return d; }
+  $("kompr_info").textContent = `${d.fotos} Fotos und ${d.videos} Videos würden kleiner – geschätzt ca. ${groesseText(d)} weniger`
+    + (d.videos && !d.ffmpeg ? " (Videos: Umwandler fehlt – bitte „uv sync“)" : "") + ".";
+  return d;
+}
+async function quelleKomprimieren() {
+  const d = await komprimierenSchaetzen();
+  if (!d.hat_plan) return;
+  if (!d.fotos && !d.videos) { alert("Nach den aktuellen Einstellungen gibt es nichts zu komprimieren (oben „Fotos verkleinern“, „neu komprimieren“ oder „Videos komprimieren“ einschalten)."); return; }
+  if (!confirm(`ACHTUNG: ${d.fotos} Fotos und ${d.videos} Videos in den QUELLORDNERN werden durch kleinere Fassungen ERSETZT (ca. ${groesseText(d)} frei).\n\n`
+    + "Das lässt sich nicht rückgängig machen. Nur machen, wenn es noch eine Sicherung der Originale gibt oder dir die kleinere Qualität reicht.\n\nJetzt starten?")) return;
+  const r = await api("/api/komprimieren", {});
+  if (!r.ok) alert("Es läuft gerade schon etwas – bitte warten.");
+  abfrageSofort();
+}
+
+// ---------------------------------------------------------------------------
+// Personen (Ausblenden & Eingaben bleiben lokal, bis „Speichern“)
+// ---------------------------------------------------------------------------
+let personenDaten = { personen: [], rollen: [] }, personenEntwurf = {}, personenGeaendert = false, entwurfTimerP = null;
 let zeigeAusgeblendete = false, zeigeKleine = false;
 async function ladePersonen() {
-  personenDaten = await api("/api/personen");
+  await entwuerfeSichern();
+  const [daten, entwurf] = await Promise.all([api("/api/personen"), api("/api/entwurf")]);
+  personenDaten = daten;
+  personenEntwurf = (entwurf.personen && entwurf.personen.daten) || {};
+  const n = Object.keys(personenEntwurf).length;
+  $("personen_entwurf").textContent = n ? `${n} noch nicht übernommene Änderung(en) vom ${entwurf.personen.zeit} wiederhergestellt` : "";
+  personenGeaendert = false;
+  zeichnePersonen();
+}
+function personWert(p) {
+  const e = personenEntwurf[p.id] || {};
+  const aus = e.aktion ? e.aktion === "ausblenden" : p.ausgeblendet;
+  return { name: e.name ?? p.name, rolle: e.rolle ?? p.rolle, ausgeblendet: aus };
+}
+function merkePersonen() {
+  personenDaten.personen.forEach((p, i) => {
+    const n = $("pn_" + i), r = $("pr_" + i);
+    if (!n) return;
+    const e = personenEntwurf[p.id] || {};
+    e.name = n.value.trim(); e.rolle = r.value;
+    if (e.name === p.name && e.rolle === p.rolle && !e.aktion) delete personenEntwurf[p.id]; else personenEntwurf[p.id] = e;
+  });
+}
+function zeichnePersonen() {
   const box = $("personen_liste");
-  let sichtbar = personenDaten.personen.map((p, i) => [p, i]).filter(([p]) => !p.ausgeblendet);
-  // Bei sehr vielen Gruppen: kleine Gruppen (2 Fotos) erst auf Wunsch zeigen
+  const alle = personenDaten.personen.map((p, i) => [p, i, personWert(p)]);
+  let sichtbar = alle.filter(([, , w]) => !w.ausgeblendet);
   const kleine = sichtbar.filter(([p]) => !p.bekannt && p.fotos < 3);
   $("kleine_knopf").style.display = sichtbar.length > 40 && kleine.length ? "" : "none";
   $("kleine_knopf").textContent = zeigeKleine ? "kleine Gruppen verbergen" : `kleine Gruppen anzeigen (${kleine.length})`;
-  if (sichtbar.length > 40 && !zeigeKleine) sichtbar = sichtbar.filter(([p]) => p.bekannt || p.fotos >= 3);
-  const versteckt = personenDaten.personen.map((p, i) => [p, i]).filter(([p]) => p.ausgeblendet);
+  if (sichtbar.length > 40 && !zeigeKleine) sichtbar = sichtbar.filter(([p, , w]) => p.bekannt || p.fotos >= 3 || w.name || w.rolle);
+  const versteckt = alle.filter(([, , w]) => w.ausgeblendet);
   $("ausgeblendet_knopf").textContent = zeigeAusgeblendete ? "ausgeblendete verbergen" : `ausgeblendete anzeigen (${versteckt.length})`;
   $("ausgeblendet_knopf").style.display = versteckt.length ? "" : "none";
   if (!personenDaten.personen.length) { box.className = "leer"; box.textContent = zustand.hat_plan ? "Keine Gesichter gefunden." : "Noch nicht analysiert."; return; }
   box.className = "personen-raster";
-  const karte = ([p, i]) => `<div class="person ${p.bekannt ? "bekannt" : ""}" ${p.ausgeblendet ? 'style="opacity:.55"' : ""}>
+  const karte = ([p, i, w]) => `<div class="person ${p.bekannt ? "bekannt" : ""}" ${w.ausgeblendet ? 'style="opacity:.55"' : ""}>
       <div class="gesichter">${p.beispiele.map(([idx, g]) => `<img loading="lazy" src="/gesicht/${idx}/${g}" title="Klick = Foto ansehen" onclick="lbOeffnen(${idx})">`).join("")}</div>
-      <div class="zeile" style="justify-content:space-between;margin-bottom:6px"><span class="hilfe">${p.fotos} Fotos ${p.ausgeblendet ? "· ausgeblendet" : p.bekannt ? "· gespeichert" : "· unbekannt"}</span>
-        ${p.ausgeblendet ? `<button class="btn klein" onclick="personAktion(${i}, 'einblenden')">wieder einblenden</button>`
-                         : `<button class="btn klein" title="Gruppe ausblenden – wird ignoriert" onclick="personAktion(${i}, 'ausblenden')">✕ ausblenden</button>`}</div>
-      ${p.ausgeblendet ? "" : `<div class="zeile"><input type="text" id="pn_${i}" value="${esc(p.name)}" placeholder="Name (optional)">
-        <select id="pr_${i}"><option value="">Rolle …</option>${personenDaten.rollen.filter((r) => r !== "ignorieren").map((r) => `<option ${r === p.rolle ? "selected" : ""}>${r}</option>`).join("")}</select></div>`}
+      <div class="zeile" style="justify-content:space-between;margin-bottom:6px"><span class="hilfe">${p.fotos} Fotos ${w.ausgeblendet ? "· ausgeblendet" : p.bekannt ? "· gespeichert" : "· unbekannt"}${personenEntwurf[p.id] ? " · <b>geändert</b>" : ""}</span>
+        ${w.ausgeblendet ? `<button class="btn klein" onclick="personAktion(${i}, 'einblenden')">wieder einblenden</button>`
+                         : `<button class="btn klein" title="Gruppe ausblenden – wird ignoriert (erst beim Speichern übernommen)" onclick="personAktion(${i}, 'ausblenden')">✕ ausblenden</button>`}</div>
+      ${w.ausgeblendet ? "" : `<div class="zeile"><input type="text" id="pn_${i}" value="${esc(w.name)}" placeholder="Name (optional)">
+        <select id="pr_${i}"><option value="">Rolle …</option>${personenDaten.rollen.filter((r) => r !== "ignorieren").map((r) => `<option ${r === w.rolle ? "selected" : ""}>${r}</option>`).join("")}</select></div>`}
     </div>`;
   box.innerHTML = sichtbar.map(karte).join("") + (zeigeAusgeblendete ? versteckt.map(karte).join("") : "");
 }
-function ausgeblendeteUmschalten() { zeigeAusgeblendete = !zeigeAusgeblendete; ladePersonen(); }
-async function personAktion(i, aktion) {
-  await api("/api/personen", { id: personenDaten.personen[i].id, aktion, neu_planen: true });
-  naechsterTab = "personen"; abfrageSofort();
+function personenAenderung() {
+  personenGeaendert = true;
+  $("personen_entwurf").textContent = "nicht gespeichert …";
+  clearTimeout(entwurfTimerP); entwurfTimerP = setTimeout(entwuerfeSichern, 1000);
+}
+document.addEventListener("input", (ev) => { if (ev.target.closest("#personen_liste")) personenAenderung(); });
+document.addEventListener("change", (ev) => { if (ev.target.closest("#personen_liste")) personenAenderung(); });
+function ausgeblendeteUmschalten() { merkePersonen(); zeigeAusgeblendete = !zeigeAusgeblendete; zeichnePersonen(); }
+function kleineUmschalten() { merkePersonen(); zeigeKleine = !zeigeKleine; zeichnePersonen(); }
+function personAktion(i, aktion) {
+  // Kein Neuladen: nur hier merken – übernommen wird beim Speichern
+  merkePersonen();
+  const p = personenDaten.personen[i], e = personenEntwurf[p.id] || {};
+  e.aktion = (aktion === "ausblenden") === !!p.ausgeblendet ? undefined : aktion;
+  if (!e.aktion) delete e.aktion;
+  personenEntwurf[p.id] = e;
+  const y = window.scrollY; zeichnePersonen(); window.scrollTo(0, y);
+  personenAenderung();
 }
 async function personenSpeichern() {
-  // Nur Gruppen, bei denen sich Name oder Rolle geändert hat. Ohne Name und
-  // ohne Rolle bleibt eine Gruppe einfach unbeachtet – das ist in Ordnung.
-  const geaendert = personenDaten.personen.map((p, i) => ({ p, i }))
-    .filter(({ p, i }) => !p.ausgeblendet && $("pn_" + i))
-    .map(({ p, i }) => ({ id: p.id, name: $("pn_" + i).value.trim(), rolle: $("pr_" + i).value, alt: p }))
-    .filter((x) => x.name !== x.alt.name || x.rolle !== x.alt.rolle)
-    .map(({ id, name, rolle }) => ({ id, name, rolle }));
-  if (!geaendert.length) { alert("Keine Änderungen."); return; }
-  for (let k = 0; k < geaendert.length; k++)
-    await api("/api/personen", { ...geaendert[k], neu_planen: k === geaendert.length - 1 });
+  merkePersonen();
+  const aenderungen = personenDaten.personen.filter((p) => personenEntwurf[p.id]).map((p) => {
+    const e = personenEntwurf[p.id];
+    if (e.aktion) return { id: p.id, aktion: e.aktion, name: e.name || "", rolle: e.rolle || "" };
+    return { id: p.id, name: e.name ?? p.name, rolle: e.rolle ?? p.rolle };
+  });
+  if (!aenderungen.length) { alert("Keine Änderungen."); return; }
+  clearTimeout(entwurfTimerP); personenGeaendert = false;
+  await api("/api/personen", { aenderungen });
+  personenEntwurf = {};
+  $("personen_entwurf").textContent = "";
   naechsterTab = "personen"; abfrageSofort();
 }
 
@@ -658,7 +986,9 @@ function passtFilter(b) {
 }
 function karte(b) {
   const klassen = ["bk", b.favorit ? "fav" : "", b.status === "aussortiert" ? "aus" : "", auswahl.has(b.id) ? "gewaehlt" : ""].join(" ");
-  const bild = b.art === "video" ? `<div class="vid">▶</div>` : `<img loading="lazy" src="/thumb/${b.id}" onclick="lbOeffnen(${b.id})">`;
+  const bild = b.art === "video"
+    ? `<img loading="lazy" draggable="false" src="/thumb/${b.id}" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className: 'vid', textContent: '▶'}))"><span class="vid-zeichen">▶</span>`
+    : `<img loading="lazy" draggable="false" src="/thumb/${b.id}" onclick="lbOeffnen(${b.id})">`;
   return `<div class="${klassen}" id="k${b.id}" title="${esc(b.pfad)}">${bild}<span class="waehlen" title="auswählen" onclick="waehle_bild(event, ${b.id})"></span>
     <div class="knoepfe">${b.art === "foto" ? `<button class="${b.favorit ? "an" : ""}" title="Favorit" onclick="setzeFav(${b.id})">★</button>` : ""}
       <button class="loesch" title="${b.status === "aussortiert" ? "zurückholen" : "aussortieren"}" onclick="setzeAus(${b.id})">${b.status === "aussortiert" ? "↩" : "🗑"}</button></div>
@@ -718,7 +1048,8 @@ function zeichnePlan() {
     return `<div class="gruppe ${zugeklappt.has(schluessel) ? "zu" : ""}" data-k="${esc(schluessel)}">
       <div class="gruppe-kopf" onclick="klappen(this.parentElement)"><span class="pfeil">▾</span><h3>${esc(g.name)}</h3>
         <span class="pill ${g.art}">${ART_TEXT[g.art] || g.art}</span>
-        <span class="info" id="info${gi}">${kopfInfo(g)}</span></div>
+        <span class="info" id="info${gi}">${kopfInfo(g)}</span>
+        <button class="btn klein waehl-alle" onclick="event.stopPropagation(); gruppeWaehlen(${gi})" title="alle Bilder dieses Ordners (im aktuellen Filter) auswählen">alle auswählen</button></div>
       <div class="bilder">${zugeklappt.has(schluessel) ? "" : bilder.slice(0, anzeigen(schluessel)).map(karte).join("")}</div>
       ${!zugeklappt.has(schluessel) && bilder.length > anzeigen(schluessel)
         ? `<div class="aktionen"><button class="btn" onclick="mehrZeigen('${esc(schluessel)}')">weitere ${Math.min(SEITE, bilder.length - anzeigen(schluessel))} von ${bilder.length - anzeigen(schluessel)} anzeigen</button></div>` : ""}</div>`;
@@ -757,15 +1088,26 @@ function aktualisiereAuswahl() {
   $("auswahlleiste").classList.toggle("an", auswahl.size > 0);
   $("auswahl_anzahl").textContent = auswahl.size;
   const sel = $("auswahl_ziel"), alt = sel.value;
-  sel.innerHTML = `<option value="__alltag">Alltag (kein Ereignis)</option>` +
+  sel.innerHTML = `<option value="__alltag">Alltag / allgemein (kein Ereignis)</option>` +
     (plan.ereignisse || []).map((e) => `<option value="${esc(e)}">${esc(e)}</option>`).join("") +
-    `<option value="__neu">+ neues Ereignis …</option>`;
+    `<option value="__neu">+ neue Gruppe / neuer Ordner …</option>`;
   if ([...sel.options].some((o) => o.value === alt)) sel.value = alt;
 }
 function auswahlLeeren() { auswahl.clear(); aktualisiereAuswahl(); }
-async function auswahlVerschieben() {
-  let ziel = $("auswahl_ziel").value;
-  if (ziel === "__neu") { ziel = prompt("Name des neuen Ereignisses (z.B. „Geburtstag Oma“):"); if (!ziel) return; }
+function gruppeWaehlen(gi) {
+  const ids = plan.gruppen[gi].bilder.filter(passtFilter).map((b) => b.id);
+  const alle = ids.every((id) => auswahl.has(id));
+  ids.forEach((id) => alle ? auswahl.delete(id) : auswahl.add(id));
+  aktualisiereAuswahl();
+}
+async function auswahlVerschieben(festesZiel) {
+  let ziel = festesZiel || $("auswahl_ziel").value;
+  if (ziel === "__neu") {
+    ziel = prompt("Name des neuen Ordners/der neuen Gruppe (z.B. „Geburtstag Oma“ oder „Allgemein“):\n" +
+                  "Er erscheint auch unter „Ereignisse“ und kann dort umbenannt oder gelöscht werden.");
+    if (!ziel || !ziel.trim()) return;
+    ziel = ziel.trim();
+  }
   const r = await api("/api/verschieben", { ids: [...auswahl], ereignis: ziel === "__alltag" ? null : ziel });
   if (!r.ok) { alert(r.fehler || "Nicht möglich"); return; }
   auswahl.clear(); aktualisiereAuswahl();
@@ -777,6 +1119,58 @@ async function auswahlAlle(aenderung) {
   auswahl.clear(); aktualisiereAuswahl();
   const y = window.scrollY; await ladePlan(); window.scrollTo(0, y);
 }
+// ---- Lasso: mit gedrückter Maus ein Rechteck über die Bilder ziehen ----
+let lasso = null;
+document.addEventListener("mousedown", (ev) => {
+  if (ev.button !== 0 || !document.querySelector("#pruefen.aktiv")) return;
+  const start = ev.target.closest("#gruppen");
+  if (!start || ev.target.closest("button, .chip, .waehlen, input, select, a, .gruppe-kopf")) return;
+  ev.preventDefault();  // keine Text-/Bildmarkierung
+  const karten = [...document.querySelectorAll("#gruppen .bk")].map((k) => {
+    const r = k.getBoundingClientRect();
+    return { id: +k.id.slice(1), el: k, x1: r.left + scrollX, y1: r.top + scrollY, x2: r.right + scrollX, y2: r.bottom + scrollY };
+  });
+  lasso = { x: ev.pageX, y: ev.pageY, mx: ev.clientX, my: ev.clientY, aktiv: false, karten,
+            modus: ev.altKey ? "weg" : (ev.ctrlKey || ev.metaKey || ev.shiftKey) ? "dazu" : "neu", vorher: new Set(auswahl), timer: null };
+});
+function lassoAktualisieren() {
+  const l = lasso, px = l.mx + scrollX, py = l.my + scrollY;
+  const x1 = Math.min(l.x, px), x2 = Math.max(l.x, px), y1 = Math.min(l.y, py), y2 = Math.max(l.y, py);
+  const box = $("lasso");
+  Object.assign(box.style, { display: "block", left: x1 - scrollX + "px", top: y1 - scrollY + "px", width: x2 - x1 + "px", height: y2 - y1 + "px" });
+  auswahl = l.modus === "neu" ? new Set() : new Set(l.vorher);
+  for (const k of l.karten) {
+    if (k.x2 < x1 || k.x1 > x2 || k.y2 < y1 || k.y1 > y2) continue;
+    l.modus === "weg" ? auswahl.delete(k.id) : auswahl.add(k.id);
+  }
+  for (const k of l.karten) k.el.classList.toggle("gewaehlt", auswahl.has(k.id));
+  $("auswahl_anzahl").textContent = auswahl.size;
+}
+document.addEventListener("mousemove", (ev) => {
+  if (!lasso) return;
+  lasso.mx = ev.clientX; lasso.my = ev.clientY;
+  if (!lasso.aktiv && Math.hypot(ev.pageX - lasso.x, ev.pageY - lasso.y) < 8) return;
+  lasso.aktiv = true;
+  lassoAktualisieren();
+  // Am Fensterrand automatisch weiterscrollen
+  const rand = 60, tempo = ev.clientY > innerHeight - rand ? 18 : ev.clientY < rand + 60 ? -18 : 0;
+  clearInterval(lasso.timer);
+  if (tempo) lasso.timer = setInterval(() => { scrollBy(0, tempo); if (lasso) lassoAktualisieren(); }, 30);
+});
+document.addEventListener("mouseup", () => {
+  if (!lasso) return;
+  clearInterval(lasso.timer);
+  const warAktiv = lasso.aktiv;
+  lasso = null;
+  $("lasso").style.display = "none";
+  if (warAktiv) {
+    aktualisiereAuswahl();
+    // Den Klick nach dem Ziehen nicht als „Bild öffnen“ werten
+    document.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); }, { capture: true, once: true });
+  }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && lbId === null && auswahl.size) auswahlLeeren(); });
+
 function findeBild(id) { for (const g of plan.gruppen) for (const b of g.bilder) if (b.id === id) return b; }
 async function aendern(id, aenderung) {
   const r = await api("/api/korrektur", { aenderungen: [{ id, ...aenderung }] });
@@ -875,6 +1269,7 @@ async function pdfErstellen() { await api("/api/pdf", { jahr: +$("pdf_jahr").val
 
 // Start
 abfragen();
+ladeSicherungen();
 </script>
 </body>
 </html>

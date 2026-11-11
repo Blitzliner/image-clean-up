@@ -233,6 +233,8 @@ def finde_dateien(quellen: list[str], ausschliessen: list[str]) -> list[Path]:
             ordner[:] = [o for o in ordner if o.lower() not in ausschliessen_l
                          and not o.startswith(".")]
             for n in namen:
+                if ".fotosort_tmp" in n:  # Reste eines abgebrochenen Komprimierens
+                    continue
                 p = Path(wurzel) / n
                 if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".heic", ".heif",
                                         ".webp", ".tif", ".tiff", ".mp4", ".mov",

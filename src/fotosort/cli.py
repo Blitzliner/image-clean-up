@@ -90,7 +90,7 @@ def zusammenfassung(items: list[dict], gruppen: list[dict], statistik: dict) -> 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="fotosort", description="Fotos sortieren & Jahresrückblick")
-    parser.add_argument("befehl", choices=["analysieren", "sortieren", "pdf", "alles", "ui", "diagnose"])
+    parser.add_argument("befehl", choices=["analysieren", "sortieren", "pdf", "alles", "ui", "diagnose", "komprimieren"])
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--interaktiv", action="store_true", help="erkannte Reisen benennen")
     parser.add_argument("--ja", action="store_true", help="ohne Rückfrage ausführen")
@@ -117,6 +117,26 @@ def main(argv: list[str] | None = None) -> None:
         from .diagnose import diagnose
 
         sys.exit(0 if diagnose(cfg) else 1)
+
+    if args.befehl == "komprimieren":
+        # Erster Schritt bei wenig Platz: Originale in den Quellordnern verkleinern
+        from .analyse import analysiere_alle
+        from .komprimieren import quellordner_komprimieren, schaetze
+
+        items = analysiere_alle(cfg)  # nutzt den Cache, schnell beim zweiten Mal
+        s = schaetze(items, cfg)
+        print(f"{s['fotos']} Fotos und {s['videos']} Videos würden kleiner (ca. {s['ersparnis_mb']:,} MB).".replace(",", "."))
+        if not (s["fotos"] or s["videos"]):
+            print("Nichts zu tun – in config.yaml unter 'ablage' verkleinern / neu_komprimieren / "
+                  "videos_komprimieren einschalten.")
+            return
+        if not args.ja:
+            antwort = input("ACHTUNG: Die Originale in den Quellordnern werden ERSETZT. Fortfahren? [j/N] ")
+            if antwort.strip().lower() not in ("j", "ja", "y", "yes"):
+                print("Abgebrochen.")
+                return
+        print("Fertig:", quellordner_komprimieren(items, cfg))
+        return
 
     if args.befehl in ("analysieren", "sortieren", "alles"):
         if not cfg["quellen"]:

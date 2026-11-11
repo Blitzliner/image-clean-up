@@ -63,10 +63,12 @@ def _aussortieren(item: dict, grund: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-def exakte_duplikate(items: list[dict]) -> int:
-    """Identische Dateien (gleicher SHA1) – nur eine bleibt."""
+def exakte_duplikate(items: list[dict], videos: bool = False) -> int:
+    """Identische Dateien (gleicher SHA1) – nur eine bleibt. Videos nur, wenn videos=True."""
     nach_hash: dict[str, list[dict]] = {}
     for i in items:
+        if i["art"] == "video" and not videos:
+            continue  # Videos werden (noch) nicht automatisch aussortiert
         if i.get("sha1"):
             nach_hash.setdefault(i["sha1"], []).append(i)
     anzahl = 0
@@ -279,7 +281,7 @@ def bereinigen(items: list[dict], cfg: dict) -> dict:
         i["grund"] = ""
         i.pop("serie", None)
     statistik = {
-        "exakte_duplikate": exakte_duplikate(items),
+        "exakte_duplikate": exakte_duplikate(items, cfg.get("videos_aussortieren", False)),
         "aehnliche_duplikate": aehnliche_duplikate(items, cfg),
         "serien_aussortiert": serien(items, cfg),
         "qualitaet_aussortiert": qualitaet_pruefen(items, cfg),

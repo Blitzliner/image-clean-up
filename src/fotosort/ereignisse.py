@@ -95,6 +95,8 @@ def lade_ereignisse(pfad: str | Path) -> list[dict]:
     for e in ereignisse:
         e["von"] = _datum(e.get("von"))
         e["bis"] = _datum(e.get("bis")) or e["von"]
+        # einzelne Tage, die NICHT zum Ereignis gehören sollen
+        e["ohne_tage"] = sorted({_datum(t) for t in (e.get("ohne_tage") or [])})
     return ereignisse
 
 
@@ -107,6 +109,8 @@ def speichere_ereignisse(pfad: str | Path, ereignisse: list[dict]) -> None:
         "#   ignorieren: true   (automatisch erkannte Reise NICHT als Ordner anlegen –\n"
         "#                       die Fotos landen dann im Alltag)\n"
         "#   im_rueckblick: false  (eigener Ordner ja, aber nicht im Jahresrückblick)\n"
+        "#   ohne_tage: [2026-05-26]  (einzelne Tage ausnehmen)\n"
+        "#   manuell: true  (Gruppe nur mit von Hand zugeordneten Bildern, ohne Datum)\n"
         "# Ohne von/bis gilt ein Ereignis für jeden Besuch einzeln (z.B. Boulderhalle).\n\n"
     )
     sauber = []
@@ -115,6 +119,9 @@ def speichere_ereignisse(pfad: str | Path, ereignisse: list[dict]) -> None:
         for k in ("von", "bis"):
             if isinstance(s.get(k), dt.date):
                 s[k] = s[k].isoformat()
+        if s.get("ohne_tage"):
+            s["ohne_tage"] = sorted(t.isoformat() if isinstance(t, dt.date) else str(t)
+                                    for t in s["ohne_tage"])
         sauber.append(s)
     with open(pfad, "w", encoding="utf-8") as f:
         f.write(kopf)
@@ -290,7 +297,11 @@ def finde_fotoreiche_zeiten(items: list[dict], cfg: dict, belegt: set,
 def _passt(i: dict, e: dict) -> bool:
     """Gehört Bild i zu Ereignis e? (Datum, Ort und Schlüsselwörter prüfen)"""
     tag = _zeit(i).date()
+    if e.get("manuell"):
+        return False  # nur von Hand zugeordnete Bilder
     if e.get("von") and not (e["von"] <= tag <= e["bis"]):
+        return False
+    if tag in (e.get("ohne_tage") or []):
         return False
     ort = e.get("ort")
     if ort:
@@ -376,7 +387,7 @@ def ordne_zu(items: list[dict], cfg: dict, interaktiv: bool = False) -> list[dic
 
     aktive = [e for e in eigene + auto if not e.get("ignorieren")]
     mit_datum = [e for e in aktive if e.get("von")]
-    ohne_datum = [e for e in aktive if not e.get("von")]
+    ohne_datum = [e for e in aktive if not e.get("von") and not e.get("manuell")]
 
     # 1) Ereignisse mit Datum
     for i in items:
