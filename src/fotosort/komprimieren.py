@@ -27,6 +27,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from .fortschritt import abbruch_angefordert, pruefe_abbruch, prozess_merken, prozess_vergessen
+
 BILD_ENDUNGEN = {".jpg", ".jpeg", ".png", ".webp"}
 VIDEO_ENDUNGEN = {".mp4", ".mov", ".3gp", ".m4v", ".avi", ".mkv"}
 MINDEST_ERSPARNIS = 0.15  # nur ersetzen, wenn mind. 15 % kleiner
@@ -162,6 +164,7 @@ def video_komprimieren(quelle: Path, ziel: Path, cfg: dict, meldung=print) -> tu
     try:
         p = subprocess.Popen(befehl, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                              encoding="utf-8", errors="replace", **_ohne_fenster())
+        prozess_merken(p)  # „Abbrechen“ beendet ffmpeg sofort
         for zeile in p.stdout:
             if zeile.startswith("out_time_ms=") and info["dauer"] > 0 and time.time() - letzte > 15:
                 letzte = time.time()
@@ -172,8 +175,12 @@ def video_komprimieren(quelle: Path, ziel: Path, cfg: dict, meldung=print) -> tu
                     pass
         fehler = p.stderr.read()
         code = p.wait()
+        prozess_vergessen(p)
     except OSError as e:
         return False, f"ffmpeg-Fehler: {e}"
+    if abbruch_angefordert():
+        tmp.unlink(missing_ok=True)  # halbfertige Datei weg, Original bleibt unberührt
+        pruefe_abbruch()
     if code != 0 or not tmp.exists():
         tmp.unlink(missing_ok=True)
         return False, f"ffmpeg-Fehler: {fehler.strip()[-200:]}"

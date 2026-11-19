@@ -33,6 +33,7 @@ from PIL import Image, ImageOps
 from . import fortschritt, personen, planung, themen
 from .ablage import ablegen
 from .config import lade_config
+from .fortschritt import Abgebrochen, abbrechen, abbruch_zuruecksetzen
 from .ereignisse import lade_ereignisse, speichere_ereignisse
 from .jahresrueckblick import erstelle_rueckblicke
 
@@ -65,6 +66,7 @@ class Zustand:
         self.log: deque[str] = deque(maxlen=400)
         self.auftrag: str | None = None  # Name des laufenden Auftrags
         self.fehler: str | None = None
+        self.hinweis: str | None = None  # z.B. „… wurde abgebrochen“
         self.items: list[dict] = []
         self.gruppen: list[dict] = []
         self.statistik: dict = {}
@@ -75,13 +77,15 @@ class Zustand:
         self.thumb_ordner.mkdir(parents=True, exist_ok=True)
 
     # --- Hintergrund-Aufträge -------------------------------------------------
-    def starte(self, name: str, funktion) -> bool:
+    def starte(self, name: str, funktion, sichern_vorher: bool = True) -> bool:
         with self.lock:
             if self.auftrag:
                 return False
-            self.auftrag, self.fehler = name, None
+            self.auftrag, self.fehler, self.hinweis = name, None, None
+        abbruch_zuruecksetzen()
         try:  # vor jeder größeren Aktion automatisch einen Zwischenstand sichern
-            sichern(self, "vor_" + name.split()[0].lower())
+            if sichern_vorher:
+                sichern(self, "vor_" + name.split()[0].lower())
         except OSError:
             pass
         self.log.append(f"— {name} gestartet ({dt.datetime.now():%H:%M:%S}) —")
@@ -91,6 +95,10 @@ class Zustand:
                 with contextlib.redirect_stdout(_LogSchreiber(self.log)):
                     funktion()
                 self.log.append(f"— {name} fertig —")
+            except Abgebrochen:
+                self.log.append(f"— {name} abgebrochen ({dt.datetime.now():%H:%M:%S}) – "
+                                "bisherige Ergebnisse bleiben erhalten —")
+                self.hinweis = f"„{name}“ wurde abgebrochen."
             except SystemExit:
                 self.fehler = "Abgebrochen – siehe Protokoll."
             except Exception as fehler:  # Fehler in der Oberfläche anzeigen
@@ -111,6 +119,7 @@ class Zustand:
             finally:
                 self.version += 1
                 self.auftrag = None
+                abbruch_zuruecksetzen()
 
         threading.Thread(target=lauf, daemon=True).start()
         return True
@@ -298,51 +307,68 @@ def speichere_entwurf(z: "Zustand", teil: str, daten) -> str:
 
 def ereignis_details(z: "Zustand", eigene: list[dict], auto: list[dict]) -> dict:
     """
-    Für die Ereignis-Ansicht: wie viele Fotos/Videos landen in welchem Ordner,
-    5 Beispielbilder und die Tage des Zeitraums (mit Anzahl, ausgenommen ja/nein).
+    Für die Ereignis-Ansicht:
+    - je Ereignis: wie viele Fotos/Videos landen in welchem Ordner
+    - je Tag: Anzahl Dateien und die (bis zu) 3 besten Bilder als Vorschau –
+      damit die Oberfläche beim Teilen/Ausblenden/Datum-Ändern sofort zeigen kann,
+      welche Bilder im Ereignis bleiben und welche herausfallen.
+    - Themen-Ordner (Haus & Renovierung, Kinder, Freunde) mit Anzahl
     """
     from collections import Counter
 
-    pro_tag = Counter(i["zeit"][:10] for i in z.items if i["art"] != "screenshot")
+    from .ereignisse import ereignis_schluessel
+
+    pro_tag = Counter()
+    tag_kandidaten: dict[str, list[int]] = {}
     zugeordnet: dict[str, list[int]] = {}
     for idx, i in enumerate(z.items):
-        if i.get("ereignis"):
-            zugeordnet.setdefault(i["ereignis"], []).append(idx)
+        if i["art"] == "screenshot":
+            continue
+        tag = i["zeit"][:10]
+        pro_tag[tag] += 1
+        tag_kandidaten.setdefault(tag, []).append(idx)
+        if i.get("ereignis_id"):
+            zugeordnet.setdefault(i["ereignis_id"], []).append(idx)
+
+    def gut(k):  # behaltene Fotos zuerst, dann nach Note
+        i = z.items[k]
+        return (i["status"] != "behalten", i["art"] != "foto", -(i.get("score") or 0))
+
+    tag_bilder = {}
+    for tag, ids in tag_kandidaten.items():
+        beste = sorted(ids, key=gut)[:3]
+        tag_bilder[tag] = sorted(beste, key=lambda k: z.items[k]["zeit"])
 
     def beispiele(ids):
-        fotos = [k for k in ids if z.items[k]["art"] == "foto" and z.items[k]["status"] == "behalten"]
-        fotos.sort(key=lambda k: -(z.items[k].get("score") or 0))
-        auswahl = fotos[:5] or [k for k in ids if z.items[k]["art"] != "foto"][:5]
-        return sorted(auswahl, key=lambda k: z.items[k]["zeit"])
+        return sorted(sorted(ids, key=gut)[:5], key=lambda k: z.items[k]["zeit"])
 
-    def tage(e):
-        if not e.get("von"):
-            return []
-        von, bis = dt.date.fromisoformat(str(e["von"])), dt.date.fromisoformat(str(e.get("bis") or e["von"]))
-        aus = {str(t) for t in (e.get("ohne_tage") or [])}
-        liste = []
-        tag = von
-        while tag <= bis and len(liste) < 120:
-            k = tag.isoformat()
-            liste.append({"tag": k, "anzahl": pro_tag.get(k, 0), "aus": k in aus})
-            tag += dt.timedelta(days=1)
-        return liste
-
-    for e in eigene:
-        ids = zugeordnet.get(e["name"], [])
+    for e in eigene + auto:
+        ids = zugeordnet.get(ereignis_schluessel(e), []) if e.get("id") else []
         ordner = sorted({f'{z.items[k]["jahr"]}/{z.items[k]["gruppe"]}' for k in ids
                          if z.items[k]["status"] == "behalten"})
+        if not e.get("id"):  # Vorschlag: alle Bilder im Zeitraum
+            ids = [k for t, l in tag_kandidaten.items() if e["von"] <= t <= e["bis"] for k in l]
         e["_info"] = {
             "fotos": sum(1 for k in ids if z.items[k]["art"] == "foto"),
             "videos": sum(1 for k in ids if z.items[k]["art"] == "video"),
             "aussortiert": sum(1 for k in ids if z.items[k]["status"] == "aussortiert"),
-            "ordner": ordner, "beispiele": beispiele(ids), "tage": tage(e),
+            "ordner": ordner, "beispiele": beispiele(ids),
         }
-    for r in auto:
-        von, bis = r["von"], r["bis"]
-        ids = [k for k, i in enumerate(z.items) if von <= i["zeit"][:10] <= bis and i["art"] != "screenshot"]
-        r["_info"] = {"beispiele": beispiele(ids), "tage": tage(r)}
-    return dict(pro_tag)
+
+    # Themen: kommen nicht aus Ereignissen, sondern aus der Bilderkennung bzw. Personen
+    themen_info = []
+    for thema, cfg_t in z.cfg["themen"].items():
+        if not isinstance(cfg_t, dict) or "name" not in cfg_t:
+            continue
+        ids = [k for k, i in enumerate(z.items) if thema in (i.get("themen") or [])]
+        if not ids:
+            continue
+        themen_info.append({
+            "thema": thema, "name": cfg_t["name"], "anzahl": len(ids),
+            "haupt": sum(1 for k in ids if z.items[k].get("gruppen_art") == "haus"),
+            "beispiele": beispiele(ids),
+        })
+    return {"pro_tag": dict(pro_tag), "tag_bilder": tag_bilder, "themen": themen_info}
 
 
 def _video_vorschau(item: dict, kante: int) -> bytes | None:
@@ -452,7 +478,12 @@ def plan_als_json(z: Zustand) -> dict:
     for g in liste:
         for b in g["bilder"]:
             b["rueckblick"] = abzeichen.get(b["id"], "")
-    ereignisse = sorted({i["ereignis"] for i in z.items if i.get("ereignis")})
+    gesehen = {}
+    for i in z.items:
+        if i.get("ereignis_id") and i["ereignis_id"] not in gesehen:
+            gesehen[i["ereignis_id"]] = {"id": i["ereignis_id"], "name": i["ereignis"],
+                                         "ordner": f'{i["jahr"]}/{i["gruppe"]}', "zeit": i["zeit"]}
+    ereignisse = sorted(gesehen.values(), key=lambda e: e["zeit"])
     return {"gruppen": liste, "statistik": z.statistik, "rueckblick": seiten, "ereignisse": ereignisse}
 
 
@@ -500,7 +531,7 @@ def baue_handler(z: Zustand):
                 return self._bytes(HTML_DATEI.read_bytes(), "text/html; charset=utf-8", cache=False)
             if url.path == "/api/zustand":
                 return self._json({
-                    "auftrag": z.auftrag, "fehler": z.fehler, "version": z.version,
+                    "auftrag": z.auftrag, "fehler": z.fehler, "hinweis": z.hinweis, "version": z.version,
                     "fortschritt": fortschritt.stand(), "schritt": fortschritt.aktueller_schritt(), "log": list(z.log)[-150:],
                     "hat_plan": bool(z.items), "statistik": z.statistik,
                     "config": config_fuer_ui(z.cfg), "config_pfad": str(z.config_pfad),
@@ -526,11 +557,11 @@ def baue_handler(z: Zustand):
                             e[k] = e[k].isoformat()
                     e["ohne_tage"] = [t.isoformat() for t in e.get("ohne_tage", []) if t]
                 auto = [dict(r) for r in z.cfg.get("_auto_reisen", [])]
-                pro_tag = ereignis_details(z, eigene, auto) if z.items else {}
+                details = ereignis_details(z, eigene, auto) if z.items else {}
                 for e in eigene + auto:
                     if "_info" in e:
                         e["info"] = e.pop("_info")
-                return self._json({"eigene": eigene, "auto": auto, "pro_tag": pro_tag,
+                return self._json({"eigene": eigene, "auto": auto, **details,
                                    "entwurf": lade_entwurf(z).get("ereignisse")})
             if url.path == "/api/entwurf":
                 return self._json(lade_entwurf(z))
@@ -580,6 +611,34 @@ def baue_handler(z: Zustand):
             if pfad == "/api/ordner_waehlen":
                 return self._json({"pfad": ordner_waehlen()})
 
+            if pfad == "/api/ereignisse_neu":
+                # Ereignisse neu erkennen lassen – Personen, Einstellungen, Sterne und
+                # aussortiert/behalten bleiben. Vorher wird alles gesichert.
+                if z.auftrag:
+                    return self._json({"ok": False, "fehler": "Bitte warten, Auftrag läuft."})
+                sichern(z, "vor_ereignisse_neu")
+                alles = bool(daten.get("alles"))
+                eigene = lade_ereignisse(z.cfg["ereignisse_datei"])
+                bleiben = [] if alles else [e for e in eigene if e.get("manuell")]
+                speichere_ereignisse(z.cfg["ereignisse_datei"], bleiben)
+                if alles:
+                    korrekturen = planung.lade_korrekturen(z.cfg)
+                    for k in korrekturen.values():
+                        k.pop("ordner", None)
+                    planung.speichere_korrekturen(z.cfg, korrekturen)
+                speichere_entwurf(z, "ereignisse", None)
+                z.log.append(f"Ereignisse zurückgesetzt ({len(eigene) - len(bleiben)} entfernt"
+                             + (", manuelle Verschiebungen aufgehoben" if alles else
+                                ", eigene Gruppen und manuelle Verschiebungen bleiben") + ").")
+                return self._json({"ok": z.starte("Ereignisse neu erkennen", z.neu_planen, sichern_vorher=False)})
+
+            if pfad == "/api/abbrechen":
+                if not z.auftrag:
+                    return self._json({"ok": False})
+                z.log.append("Abbrechen angefordert – stoppe beim nächsten Zwischenschritt …")
+                abbrechen()
+                return self._json({"ok": True})
+
             if pfad == "/api/entwurf":
                 zeit = speichere_entwurf(z, daten["teil"], daten.get("daten"))
                 return self._json({"ok": True, "zeit": zeit})
@@ -594,7 +653,7 @@ def baue_handler(z: Zustand):
                 if not wiederherstellen(z, daten.get("name", "")):
                     return self._json({"ok": False, "fehler": "Sicherung nicht gefunden"})
                 z.cfg = lade_config(z.config_pfad)
-                return self._json({"ok": z.starte("Wiederherstellen", z.neu_planen)})
+                return self._json({"ok": z.starte("Wiederherstellen", z.neu_planen, sichern_vorher=False)})
 
             if pfad == "/api/komprimieren":
                 from .komprimieren import quellordner_komprimieren
@@ -619,18 +678,16 @@ def baue_handler(z: Zustand):
 
             if pfad == "/api/ereignisse":
                 eigene = daten.get("eigene", [])
-                # Umbenannte/gelöschte Ereignisse auch in den manuellen Zuordnungen nachziehen
-                umbenannt = {e["alt_name"]: e["name"] for e in eigene
-                             if e.get("alt_name") and e["alt_name"] != e["name"]}
-                behalten = {e["name"] for e in eigene}
+                # Gelöschte Ereignisse/Gruppen: deren manuelle Zuordnungen aufheben.
+                # (Umbenennen braucht nichts – Zuordnungen hängen an der Kennung „id“.)
+                geloescht = set(daten.get("geloescht") or [])
+                alte_namen = {e["id"]: e["name"] for e in lade_ereignisse(z.cfg["ereignisse_datei"])}
                 korrekturen = planung.lade_korrekturen(z.cfg)
                 geaendert = False
                 for k in korrekturen.values():
-                    ziel = (k.get("ordner") or {}).get("ereignis")
-                    if ziel in umbenannt:
-                        k["ordner"]["ereignis"] = umbenannt[ziel]
-                        geaendert = True
-                    elif ziel and ziel not in behalten and daten.get("geloescht") and ziel in daten["geloescht"]:
+                    o = k.get("ordner") or {}
+                    if o.get("id") in geloescht or (not o.get("id") and o.get("ereignis") in
+                                                     {alte_namen.get(g) for g in geloescht}):
                         k.pop("ordner")  # Gruppe gelöscht -> Bild wieder automatisch zuordnen
                         geaendert = True
                 if geaendert:
@@ -638,6 +695,8 @@ def baue_handler(z: Zustand):
                 for e in eigene:
                     e.pop("alt_name", None)
                     e.pop("info", None)
+                    if not e.get("id"):
+                        e.pop("id", None)  # neue Ereignisse bekommen beim Speichern eine Kennung
                     for k in ("von", "bis"):
                         if e.get(k):
                             e[k] = dt.date.fromisoformat(e[k])
@@ -675,18 +734,28 @@ def baue_handler(z: Zustand):
                 if z.auftrag:
                     return self._json({"ok": False, "fehler": "Bitte warten, Auftrag läuft."})
                 korrekturen = planung.lade_korrekturen(z.cfg)
-                ziel = daten.get("ereignis") or None
-                if ziel:
+                # Ziel: {"id": …} eines vorhandenen Ereignisses, {"neu": "Name"} oder nichts (= Alltag)
+                ziel = None
+                if daten.get("neu"):
+                    from .ereignisse import neue_id
+
                     eigene = lade_ereignisse(z.cfg["ereignisse_datei"])
-                    if ziel not in {e["name"] for e in eigene}:
-                        bekannt = {i.get("ereignis") for i in z.items}
-                        if ziel not in bekannt:  # wirklich neu -> als eigene Gruppe merken
-                            eigene.append({"name": ziel, "manuell": True})
-                            speichere_ereignisse(z.cfg["ereignisse_datei"], eigene)
+                    neu = {"id": neue_id(), "name": daten["neu"].strip(), "manuell": True}
+                    eigene.append(neu)  # neue Gruppe – derselbe Name darf schon existieren
+                    speichere_ereignisse(z.cfg["ereignisse_datei"], eigene)
+                    ziel = {"id": neu["id"], "ereignis": neu["name"]}
+                elif daten.get("id"):
+                    name = next((i["ereignis"] for i in z.items if i.get("ereignis_id") == daten["id"]), None)
+                    if daten["id"].startswith("auto-"):  # automatisch erkannte Reise: per Name
+                        ziel = {"ereignis": name}
+                    else:
+                        ziel = {"id": daten["id"], "ereignis": name}
+                elif daten.get("ereignis"):  # ältere Aufrufe: nur Name
+                    ziel = {"ereignis": daten["ereignis"]}
                 for idx in daten.get("ids", []):
                     item = self._item(str(idx))
                     if item:
-                        korrekturen.setdefault(item["pfad"], {})["ordner"] = {"ereignis": ziel}
+                        korrekturen.setdefault(item["pfad"], {})["ordner"] = ziel or {"ereignis": None}
                 planung.speichere_korrekturen(z.cfg, korrekturen)
                 planung.wende_ordner_korrekturen_an(z.items, korrekturen, z.cfg, z.gruppen)
                 themen.bestimme_themen(z.items, z.cfg, korrekturen)

@@ -132,19 +132,28 @@
   /* Ereignisse */
   .ev { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
   .ev.ignoriert { opacity: .7; } .ev.manuell-gruppe { border-left: 4px solid #a57ee0; }
-  .ev .felder { display: grid; grid-template-columns: 2.2fr 1.1fr 1.1fr .8fr .8fr .6fr 1.6fr auto; gap: 8px; align-items: end; }
+  .ev .felder { display: grid; grid-template-columns: 3fr 1.2fr 1.2fr auto; gap: 8px; align-items: end; max-width: 900px; }
   .ev .felder label { font-size: 11.5px; margin-bottom: 2px; }
   .ev .haken { display: flex; gap: 14px; align-items: center; font-size: 13px; margin-top: 8px; flex-wrap: wrap; }
   .ev .haken label { display: flex; gap: 5px; align-items: center; color: var(--ink); font-size: 13px; margin: 0; }
   .ev .ziel { font-size: 13.5px; margin-top: 8px; } .ev .ziel code { background: #f3efe8; padding: 1px 6px; border-radius: 4px; }
   .mini { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   .mini img { width: 112px; height: 84px; object-fit: cover; border-radius: 6px; background: #eee; cursor: zoom-in; }
-  .tage { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
-  .tag { border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; font-size: 12px; cursor: pointer; background: #f8f5ef; user-select: none; }
-  .tag small { color: var(--muted); margin-left: 3px; }
-  .tag.aus { background: #fff; color: #b7aea3; text-decoration: line-through; border-style: dashed; }
-  .tag.leer small { color: #c9c0b5; }
-  .ev.teilen .tag { border-color: var(--accent); } .ev.teilen .tag:hover { background: var(--accent); color: #fff; }
+  .tage { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .tagkachel { border: 1px solid var(--line); border-radius: 8px; background: #f8f5ef; padding: 4px; cursor: pointer; user-select: none; }
+  .tagkachel:hover { border-color: var(--accent); }
+  .tagkopf { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; padding: 0 2px 3px; }
+  .tagkopf small { color: var(--muted); }
+  .tagbilder { display: flex; gap: 3px; min-height: 60px; align-items: center; }
+  .tagbilder img { width: 80px; height: 60px; object-fit: cover; border-radius: 4px; background: #eee; }
+  .tagkachel.aus { background: #fff; border-style: dashed; }
+  .tagkachel.aus .tagbilder img { opacity: .25; filter: grayscale(1); }
+  .tagkachel.aus .tagkopf span { text-decoration: line-through; color: #b7aea3; }
+  .tagkachel.leer .tagbilder { min-height: 30px; }
+  .ev.teilen .tagkachel:hover, .ev.teilen .tagkachel:hover ~ .tagkachel { outline: 2px solid var(--accent); background: #fff3e6; }
+  .ev.teilen .tagkachel:hover::before { content: "✂ ab hier Teil 2"; display: block; font-size: 11px; color: var(--accent); font-weight: 600; }
+  .bilanz { font-size: 13.5px; margin-top: 6px; } .raus-text { color: #b0603a; }
+  .thema-zeile { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .entwurf { font-size: 12.5px; color: var(--muted); }
   #lasso { position: fixed; border: 2px solid #2f6fd6; background: #2f6fd622; z-index: 45; pointer-events: none; display: none; border-radius: 3px; }
   #gruppen { user-select: none; }
@@ -167,7 +176,8 @@
     <button data-tab="ablegen"><b>5</b>Ablegen &amp; Rückblick</button>
   </nav>
   <button class="btn klein" style="margin-left:18px" onclick="zwischenstand()" title="Alle Eingaben (auch noch nicht übernommene) und Einstellungen sichern – z.B. um morgen weiterzumachen">💾 Zwischenstand speichern</button>
-  <div id="status"><div id="balken" title=""><div id="balken_innen"></div></div><span class="punkt" id="punkt"></span><span id="status-text">bereit</span></div>
+  <div id="status"><div id="balken" title=""><div id="balken_innen"></div></div><span class="punkt" id="punkt"></span><span id="status-text">bereit</span>
+    <button class="btn klein" id="btn_abbrechen" style="display:none;margin-left:10px;border-color:#c0392b;color:#c0392b" onclick="auftragAbbrechen()" title="Den laufenden Vorgang stoppen – bisherige Ergebnisse bleiben erhalten">■ Abbrechen</button></div>
 </header>
 
 <main>
@@ -343,9 +353,10 @@
     </div>
     <div class="karte">
       <h3>Deine Ereignisse &amp; Gruppen</h3>
-      <p class="hilfe" style="margin-top:-6px">Bei jedem Ereignis siehst du, <b>in welchen Ordner</b> wie viele Fotos und Videos kommen, dazu 5 Beispielbilder.
-        <b>Tage anklicken</b> = Tag herausnehmen (durchgestrichen; die Bilder kommen dann in den Alltag-Ordner). <b>✂ teilen</b> und dann einen Tag anklicken = ab diesem Tag ein zweites Ereignis.
-        Ohne Datum, nur mit Ort: jeder Besuch wird ein eigener Ordner (z.B. Bouldern im Frühjahr und Herbst getrennt).
+      <p class="hilfe" style="margin-top:-6px">Jeder Tag eines Ereignisses zeigt 2 Bilder und die Anzahl Dateien. <b>Tag anklicken</b> = herausnehmen
+        (grau, die Bilder kommen in den Alltag) – nochmal klicken holt ihn zurück. <b>✂ teilen</b>, dann auf einen Tag klicken = ab diesem Tag ein
+        zweites Ereignis (beim Zeigen ist markiert, welche Tage in Teil 2 wandern). Datum ändern zeigt sofort die Bilder der neuen Tage.
+        Derselbe Name darf mehrmals vorkommen (z.B. zweimal „Fontainebleau“) – jedes Ereignis bekommt trotzdem seinen eigenen Ordner.
         <b>Gruppe</b> = eigener Ordner ohne Zeitraum – Bilder kommen nur hinein, wenn du sie in „Bilder prüfen“ dorthin verschiebst.</p>
       <div id="ereignis_entwurf" class="hinweis" style="display:none"></div>
       <div id="ereignis_liste"></div>
@@ -353,6 +364,22 @@
         <button class="btn klein" onclick="ereignisZeile({}, true)">+ Ereignis</button>
         <button class="btn klein" onclick="ereignisZeile({ manuell: true }, true)">+ Gruppe (ohne Zeitraum)</button>
         <span class="entwurf" id="ereignis_entwurf_zeit"></span>
+      </div>
+    </div>
+    <div class="karte">
+      <h3>Themen-Ordner (keine Ereignisse)</h3>
+      <p class="hilfe" style="margin-top:-6px">Diese Ordner entstehen nicht aus Zeiträumen, sondern aus dem <b>Bildinhalt</b> (Haus &amp; Renovierung)
+        bzw. den <b>Personen</b> (Kinder, Mit Freunden). Darum stehen sie hier und nicht oben bei den Ereignissen. Ändern: in „Bilder prüfen“
+        die Häkchen <i>Haus / Kinder / Freunde</i> am Bild setzen oder entfernen, oder unter „Personen“ Rollen vergeben.</p>
+      <div id="themen_info"></div>
+    </div>
+    <div class="karte">
+      <h3>Ereignisse neu erkennen</h3>
+      <p class="hilfe" style="margin-top:-6px">Verwirft die Ereignisse und lässt sie neu erkennen (z.B. nach geänderten Einstellungen unter „Reisen &amp; Ereignisse erkennen“).
+        <b>Personen, Einstellungen, Sterne und Aussortiert/Behalten bleiben.</b> Vorher wird automatisch ein Zwischenstand gesichert.</p>
+      <div class="aktionen">
+        <button class="btn" onclick="ereignisseNeuErkennen(false)">↺ Ereignisse neu erkennen</button>
+        <button class="btn" onclick="ereignisseNeuErkennen(true)">↺ komplett neu (auch eigene Gruppen &amp; Verschiebungen)</button>
       </div>
     </div>
     <div class="aktionen"><button class="btn haupt" onclick="ereignisseSpeichern()">Speichern &amp; neu einteilen</button>
@@ -487,6 +514,12 @@ function zeigeTab(name) {
 // Zustand / Protokoll (regelmäßig abfragen)
 // ---------------------------------------------------------------------------
 let naechsterTab = null, autoOffen = false, zustand = {}, geladeneVersion = -1, configGeladen = false, abfrageTimer = null;
+async function auftragAbbrechen() {
+  const ab = $("btn_abbrechen");
+  ab.disabled = true; ab.textContent = "wird gestoppt …";
+  await api("/api/abbrechen", {});
+  abfrageSofort();
+}
 async function abfragen() {
   try { zustand = await api("/api/zustand"); } catch (e) {
     $("status-text").textContent = "keine Verbindung";
@@ -513,6 +546,9 @@ async function abfragen() {
     text = `Schritt ${sch.nr}/${sch.gesamt}: ${sch.name} · ${seit < 90 ? seit + " s" : Math.round(seit / 60) + " min"}`;
   }
   $("balken").style.display = laeuft && f.gesamt ? "block" : "none";
+  const ab = $("btn_abbrechen");
+  ab.style.display = laeuft ? "" : "none";
+  if (!laeuft) { ab.disabled = false; ab.textContent = "■ Abbrechen"; }
   $("status-text").textContent = text;
   $("fehlerbox").style.display = zustand.fehler ? "block" : "none";
   $("fehlerbox").textContent = zustand.fehler || "";
@@ -530,7 +566,8 @@ async function abfragen() {
   if (!laeuft && zustand.version !== geladeneVersion) { // ein Auftrag ist fertig geworden
     geladeneVersion = zustand.version;
     if (zustand.hat_plan) await ladePlan();
-    const tabGewechselt = naechsterTab && !zustand.fehler;
+    if (zustand.hinweis) toast(zustand.hinweis);
+    const tabGewechselt = naechsterTab && !zustand.fehler && !zustand.hinweis;
     if (tabGewechselt) { zeigeTab(naechsterTab); if (naechsterTab !== "ereignisse") window.scrollTo(0, 0); }
     naechsterTab = null;
     if (!tabGewechselt && document.querySelector("#ereignisse.aktiv")) ladeEreignisse();
@@ -610,26 +647,30 @@ function abfrageSofort() { clearTimeout(abfrageTimer); abfrageTimer = setTimeout
 // ---------------------------------------------------------------------------
 // 2 Ereignisse
 // ---------------------------------------------------------------------------
-// Ereignisse: Liste mit Beispielbildern, Tagen, Teilen und Entwurf
-let ereignisDaten = { eigene: [], auto: [], pro_tag: {} }, ereignisAltNamen = [], ereignisGeaendert = false, entwurfTimerE = null;
+// Ereignisse: Liste mit Tagesvorschau (≥2 Bilder je Tag), Teilen, Ausblenden – alles sofort sichtbar
+let ereignisDaten = { eigene: [], auto: [], pro_tag: {}, tag_bilder: {}, themen: [] };
+let ereignisAltIds = [], ereignisGeaendert = false, entwurfTimerE = null;
 const WOCHENTAG = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const MAX_TAGE_ANZEIGE = 62;
 function isoTag(d) { return d.toISOString().slice(0, 10); }
 function tagePlus(iso, n) { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return isoTag(d); }
 function kurzDatum(iso) { const d = new Date(iso + "T12:00:00Z"); return `${WOCHENTAG[d.getUTCDay()]} ${iso.slice(8, 10)}.${iso.slice(5, 7)}.`; }
+function zahl(n) { return Number(n || 0).toLocaleString("de-DE"); }
+function bildAuf(id) { const b = findeBild(id); if (b && b.art !== "video") lbOeffnen(id); }
 function miniBilder(ids) {
-  return ids && ids.length ? `<div class="mini">${ids.map((i) => `<img loading="lazy" src="/thumb/${i}" onclick="lbOeffnen(${i})" title="groß ansehen">`).join("")}</div>` : "";
+  return ids && ids.length ? `<div class="mini">${ids.map((i) => `<img loading="lazy" src="/thumb/${i}" onclick="bildAuf(${i})" title="groß ansehen">`).join("")}</div>` : "";
 }
 async function ladeEreignisse() {
   await entwuerfeSichern();
   const d = await api("/api/ereignisse");
-  ereignisDaten = d;
-  ereignisAltNamen = d.eigene.map((e) => e.name);
+  ereignisDaten = { pro_tag: {}, tag_bilder: {}, themen: [], ...d };
+  ereignisAltIds = d.eigene.map((e) => e.id).filter(Boolean);
   let liste = d.eigene;
   const hinweis = $("ereignis_entwurf");
   hinweis.style.display = "none";
   if (d.entwurf && Array.isArray(d.entwurf.daten)) {
-    const info = Object.fromEntries(d.eigene.map((e) => [e.name, e.info]));
-    liste = d.entwurf.daten.map((e) => ({ ...e, info: e.alt_name ? info[e.alt_name] : undefined }));
+    const info = Object.fromEntries(d.eigene.map((e) => [e.id, e.info]));
+    liste = d.entwurf.daten.map((e) => ({ ...e, info: e.id ? info[e.id] : undefined }));
     hinweis.style.display = "block";
     hinweis.innerHTML = `Deine noch nicht übernommenen Änderungen vom ${esc(d.entwurf.zeit)} sind wiederhergestellt –
       mit „Speichern &amp; neu einteilen“ übernehmen. <button class="btn klein" onclick="entwurfVerwerfen()">Entwurf verwerfen</button>`;
@@ -638,6 +679,19 @@ async function ladeEreignisse() {
   liste.forEach((e) => ereignisZeile(e));
   ereignisGeaendert = false;
   zeichneAutoReisen(d);
+  zeichneThemenInfo();
+}
+function zeichneThemenInfo() {
+  const box = $("themen_info"), t = ereignisDaten.themen || [];
+  if (!t.length) { box.innerHTML = `<span class="hilfe">Noch keine Themen-Bilder erkannt.</span>`; return; }
+  box.innerHTML = t.map((x) => `<div class="thema-zeile"><div><b>${esc(x.name)}</b> – ${zahl(x.anzahl)} Bilder
+      ${x.thema === "haus" ? `<span class="hilfe">(${zahl(x.haupt)} davon liegen nur dort; Fotos aus Ereignissen bleiben im Ereignis und kommen als Kopie dazu)</span>`
+                           : `<span class="hilfe">(Kopien – die Originale bleiben in ihrem Ereignis/Alltag)</span>`}
+      <button class="btn klein" onclick="zeigeThema('${x.thema}')">in „Bilder prüfen“ ansehen</button></div>${miniBilder(x.beispiele)}</div>`).join("");
+}
+function zeigeThema(thema) {
+  zeigeTab("pruefen");
+  document.querySelector(`#filter button[data-f="${thema}"]`)?.click();
 }
 function zeichneAutoReisen(d) {
   const box = $("auto_reisen");
@@ -658,70 +712,96 @@ function zeichneAutoReisen(d) {
 }
 function ereignisZeile(e, neu) {
   const div = document.createElement("div");
-  const ort = e.ort || {};
   div.className = "ev" + (e.manuell ? " manuell-gruppe" : "") + (e.ignorieren ? " ignoriert" : "");
-  div.dataset.alt = e.alt_name !== undefined ? e.alt_name : (neu ? "" : e.name || "");
+  div.dataset.id = neu ? "" : e.id || "";
   div.dataset.manuell = e.manuell ? "1" : "";
   div.dataset.ohne = JSON.stringify(e.ohne_tage || []);
-  const felder = e.manuell
+  // Ort/Schlüsselwörter werden nicht mehr angezeigt, bleiben aber erhalten (falls in ereignisse.yaml gesetzt)
+  div._extra = { ort: e.ort, schluesselwoerter: e.schluesselwoerter };
+  div._info = neu ? null : e.info;
+  const wiederkehrend = !e.manuell && !e.von && (e.ort || e.schluesselwoerter);
+  div.innerHTML = e.manuell
     ? `<div class="felder" style="grid-template-columns: 2.2fr 5fr auto"><div><label>Name der Gruppe (Ordner)</label><input type="text" class="e_name" value="${esc(e.name)}"></div>
          <div class="hilfe" style="align-self:center">Gruppe ohne Zeitraum – enthält nur Bilder, die du in „Bilder prüfen“ hierher verschiebst.</div>
-         <div><button class="btn klein" title="Gruppe löschen – ihre Bilder werden wieder automatisch eingeteilt" onclick="ereignisEntfernen(this)">✕</button></div></div>`
+         <div><button class="btn klein" title="Gruppe löschen – ihre Bilder werden wieder automatisch eingeteilt" onclick="ereignisEntfernen(this)">✕</button></div></div>
+       <div class="ziel"></div>${miniBilder((e.info || {}).beispiele)}`
     : `<div class="felder">
-        <div><label>Name</label><input type="text" class="e_name" value="${esc(e.name)}"></div>
+        <div><label>Name (darf mehrfach vorkommen)</label><input type="text" class="e_name" value="${esc(e.name)}"></div>
         <div><label>von</label><input type="date" class="e_von" value="${esc(e.von || "")}"></div>
         <div><label>bis</label><input type="date" class="e_bis" value="${esc(e.bis || "")}"></div>
-        <div><label>Ort lat</label><input type="number" step="0.001" class="e_lat" value="${ort.lat ?? ""}"></div>
-        <div><label>lon</label><input type="number" step="0.001" class="e_lon" value="${ort.lon ?? ""}"></div>
-        <div><label>Radius km</label><input type="number" step="0.5" class="e_rad" value="${ort.radius_km ?? ""}"></div>
-        <div><label>Schlüsselwörter</label><input type="text" class="e_wort" value="${esc((e.schluesselwoerter || []).join(", "))}"></div>
         <div><button class="btn klein" title="Ereignis löschen" onclick="ereignisEntfernen(this)">✕</button></div></div>
       <div class="haken">
         <label title="eigener Ordner, aber nicht im Jahresrückblick"><input type="checkbox" class="e_rb" ${e.im_rueckblick === false ? "" : "checked"}> im Rückblick</label>
         <label title="kein eigener Ordner – Fotos kommen in den Alltag"><input type="checkbox" class="e_ign" ${e.ignorieren ? "checked" : ""}> kein eigener Ordner</label>
-        <button class="btn klein e_teilen" onclick="teilenUmschalten(this)" title="Danach einen Tag anklicken: ab diesem Tag beginnt ein neues Ereignis">✂ teilen</button>
-      </div>`;
-  div.innerHTML = felder + `<div class="ziel"></div><div class="tage"></div>${miniBilder((e.info || {}).beispiele)}`;
-  div._info = e.info;
+        <button class="btn klein e_teilen" onclick="teilenUmschalten(this)" title="Danach auf einen Tag klicken: ab diesem Tag beginnt ein neues Ereignis">✂ teilen</button>
+        ${wiederkehrend ? `<span class="hilfe">wiederkehrend über Ort/Stichwort (aus ereignisse.yaml) – jeder Besuch eigener Ordner</span>` : ""}
+      </div>
+      <div class="ziel"></div><div class="bilanz"></div><div class="tage"></div>`;
   $("ereignis_liste").appendChild(div);
-  zeichneZiel(div);
-  zeichneTage(div);
+  aktualisiereEreignis(div);
   if (neu) { div.querySelector(".e_name").focus(); ereignisAenderung(); }
+  return div;
 }
-function zeichneZiel(div) {
-  const info = div._info, ziel = div.querySelector(".ziel");
-  const ign = div.querySelector(".e_ign")?.checked;
-  if (ign) { ziel.innerHTML = "→ kein eigener Ordner: die Bilder werden normal behalten und kommen in den Alltag-Ordner."; return; }
-  if (!info) { ziel.innerHTML = `<span class="hilfe">Neu oder geändert – nach „Speichern &amp; neu einteilen“ steht hier, welche Bilder in welchen Ordner kommen.</span>`; return; }
-  if (!info.fotos && !info.videos) { ziel.innerHTML = `<span class="hilfe">Noch keine Bilder zugeordnet.</span>`; return; }
-  const ordner = info.ordner.length ? info.ordner.map((o) => `<code>${esc(o)}</code>`).join(", ") : "–";
-  ziel.innerHTML = `→ Ordner ${ordner}: <b>${info.fotos}</b> Fotos, <b>${info.videos}</b> Videos${info.aussortiert ? ` (davon ${info.aussortiert} in „Aussortiert“)` : ""}
-    <button class="btn klein" style="margin-left:8px" onclick="zeigeImPruefen(${esc(JSON.stringify(info.ordner))})">in „Bilder prüfen“ ansehen</button>`;
-}
-function zeichneTage(div) {
-  const box = div.querySelector(".tage");
-  if (!box) return;
+function ereignisTage(div) {
   const von = div.querySelector(".e_von")?.value, bis = div.querySelector(".e_bis")?.value || von;
-  const teilen = div.querySelector(".e_teilen");
-  if (teilen) teilen.style.display = von && bis > von ? "" : "none";
-  if (!von || bis < von) { box.innerHTML = ""; return; }
-  const ohne = new Set(JSON.parse(div.dataset.ohne || "[]"));
+  if (!von || bis < von) return [];
   const tage = [];
-  for (let t = von; t <= bis && tage.length < 120; t = tagePlus(t, 1)) tage.push(t);
-  box.innerHTML = tage.map((t) => {
-    const n = ereignisDaten.pro_tag[t] || 0;
-    return `<span class="tag ${ohne.has(t) ? "aus" : ""} ${n ? "" : "leer"}" data-tag="${t}" title="${ohne.has(t) ? "wieder aufnehmen" : "herausnehmen"}">${kurzDatum(t)}<small>${n}</small></span>`;
-  }).join("");
+  for (let t = von; t <= bis && tage.length < 400; t = tagePlus(t, 1)) tage.push(t);
+  return tage;
+}
+// Alles, was sich aus Datum/Tagen ableitet, sofort neu zeichnen (ohne Server)
+function aktualisiereEreignis(div) {
+  const ziel = div.querySelector(".ziel"), info = div._info;
+  const ign = div.querySelector(".e_ign")?.checked;
+  if (div.dataset.manuell) {
+    ziel.innerHTML = !info ? `<span class="hilfe">Neue Gruppe – verschiebe in „Bilder prüfen“ Bilder hierher.</span>`
+      : `→ Ordner ${info.ordner.map((o) => `<code>${esc(o)}</code>`).join(", ") || "–"}: <b>${info.fotos}</b> Fotos, <b>${info.videos}</b> Videos
+         ${info.ordner.length ? `<button class="btn klein" style="margin-left:8px" onclick='zeigeImPruefen(${esc(JSON.stringify(info.ordner))})'>in „Bilder prüfen“ ansehen</button>` : ""}`;
+    return;
+  }
+  const tage = ereignisTage(div), ohne = new Set(JSON.parse(div.dataset.ohne || "[]"));
+  const teilen = div.querySelector(".e_teilen");
+  if (teilen) teilen.style.display = tage.length > 1 ? "" : "none";
+  // Bilanz: was bleibt im Ereignis, was fällt heraus
+  const drin = tage.filter((t) => !ohne.has(t)), raus = tage.filter((t) => ohne.has(t));
+  const n = (l) => l.reduce((s, t) => s + (ereignisDaten.pro_tag[t] || 0), 0);
+  const bilanz = div.querySelector(".bilanz");
+  bilanz.innerHTML = !tage.length ? "" : ign
+    ? `<span class="hilfe">${zahl(n(drin))} Dateien – bleiben behalten, kommen aber in den Alltag-Ordner.</span>`
+    : `Im Ereignis: <b>${zahl(n(drin))}</b> Dateien an ${drin.length} Tag(en)` +
+      (raus.length ? ` · <span class="raus-text">herausgenommen: <b>${zahl(n(raus))}</b> Dateien an ${raus.length} Tag(en) → Alltag</span>` : "");
+  // Ordner-Zeile vom Server – nur solange nichts geändert wurde
+  const geaendert = div.dataset.stand !== undefined && div.dataset.stand !== standVon(div);
+  if (div.dataset.stand === undefined) div.dataset.stand = standVon(div);
+  if (ign) ziel.innerHTML = "→ kein eigener Ordner: die Bilder werden normal behalten und kommen in den Alltag-Ordner.";
+  else if (!info || geaendert) ziel.innerHTML = `<span class="hilfe">${info ? "Geändert" : "Neu"} – Ordner und genaue Zahlen nach „Speichern &amp; neu einteilen“. Die Vorschau unten zeigt schon jetzt, welche Tage dazugehören.</span>`;
+  else if (!info.fotos && !info.videos) ziel.innerHTML = `<span class="hilfe">Noch keine Bilder zugeordnet.</span>`;
+  else ziel.innerHTML = `→ Ordner ${info.ordner.map((o) => `<code>${esc(o)}</code>`).join(", ") || "–"}: <b>${info.fotos}</b> Fotos, <b>${info.videos}</b> Videos${info.aussortiert ? ` (davon ${info.aussortiert} in „Aussortiert“)` : ""}
+      <button class="btn klein" style="margin-left:8px" onclick='zeigeImPruefen(${esc(JSON.stringify(info.ordner))})'>in „Bilder prüfen“ ansehen</button>`;
+  // Tageskacheln mit je 2 Bildern
+  const box = div.querySelector(".tage");
+  const zeigen = tage.slice(0, MAX_TAGE_ANZEIGE);
+  box.innerHTML = zeigen.map((t) => {
+    const anzahl = ereignisDaten.pro_tag[t] || 0, bilder = (ereignisDaten.tag_bilder[t] || []).slice(0, 2);
+    return `<div class="tagkachel ${ohne.has(t) ? "aus" : ""} ${anzahl ? "" : "leer"}" data-tag="${t}">
+      <div class="tagkopf" title="${ohne.has(t) ? "Tag wieder aufnehmen" : "Tag herausnehmen"}"><span>${kurzDatum(t)}</span><small>${anzahl} ${ohne.has(t) ? "· raus" : ""}</small></div>
+      <div class="tagbilder">${bilder.map((id) => `<img loading="lazy" src="/thumb/${id}" data-bild="${id}" title="groß ansehen">`).join("") || `<span class="hilfe">keine Bilder</span>`}</div>
+    </div>`;
+  }).join("") + (tage.length > zeigen.length ? `<div class="hilfe" style="align-self:center">… und ${tage.length - zeigen.length} weitere Tage</div>` : "");
+}
+function standVon(div) {
+  return [div.querySelector(".e_von")?.value, div.querySelector(".e_bis")?.value, div.dataset.ohne, div.querySelector(".e_ign")?.checked].join("|");
 }
 document.addEventListener("click", (ev) => {
-  const tag = ev.target.closest("#ereignis_liste .tag");
-  if (!tag) return;
-  const div = tag.closest(".ev"), t = tag.dataset.tag;
+  const kachel = ev.target.closest("#ereignis_liste .tagkachel");
+  if (!kachel) return;
+  const div = kachel.closest(".ev"), t = kachel.dataset.tag;
   if (div.classList.contains("teilen")) return ereignisTeilen(div, t);
+  if (ev.target.dataset.bild) return bildAuf(+ev.target.dataset.bild);  // Bild = groß ansehen
   const ohne = new Set(JSON.parse(div.dataset.ohne || "[]"));
   ohne.has(t) ? ohne.delete(t) : ohne.add(t);
   div.dataset.ohne = JSON.stringify([...ohne].sort());
-  div._info = null; zeichneZiel(div); zeichneTage(div); ereignisAenderung();
+  aktualisiereEreignis(div); ereignisAenderung();
 });
 function teilenUmschalten(knopf) {
   const div = knopf.closest(".ev");
@@ -731,29 +811,29 @@ function teilenUmschalten(knopf) {
 function ereignisTeilen(div, tag) {
   const von = div.querySelector(".e_von").value, bis = div.querySelector(".e_bis").value || von;
   div.classList.remove("teilen"); div.querySelector(".e_teilen").textContent = "✂ teilen";
-  if (tag <= von) { alert("Bitte einen Tag nach dem ersten Tag wählen – ab dort beginnt das zweite Ereignis."); return; }
+  if (tag <= von) { alert("Bitte einen späteren Tag wählen – ab diesem Tag beginnt das zweite Ereignis."); return; }
   const ohne = JSON.parse(div.dataset.ohne || "[]");
   const e = leseEreignis(div);
   div.querySelector(".e_bis").value = tagePlus(tag, -1);
   div.dataset.ohne = JSON.stringify(ohne.filter((t) => t < tag));
-  div._info = null; zeichneZiel(div); zeichneTage(div);
-  const zweites = { ...e, name: e.name + " Teil 2", von: tag, bis, ohne_tage: ohne.filter((t) => t >= tag), alt_name: "" };
-  ereignisZeile(zweites, true);
-  div.after($("ereignis_liste").lastElementChild);
+  aktualisiereEreignis(div);
+  const zweites = ereignisZeile({ ...e, id: "", von: tag, bis, ohne_tage: ohne.filter((t) => t >= tag) }, true);
+  div.after(zweites);
+  zweites.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 function ereignisEntfernen(knopf) {
   const div = knopf.closest(".ev");
   const name = div.querySelector(".e_name").value;
-  if (div.dataset.alt && !confirm(`„${name}“ löschen? Die Bilder bleiben erhalten und werden wieder automatisch eingeteilt.`)) return;
+  if (div.dataset.id && !confirm(`„${name}“ löschen? Die Bilder bleiben erhalten und werden wieder automatisch eingeteilt.`)) return;
   div.remove(); ereignisAenderung();
 }
 function leseEreignis(div) {
   const q = (k) => (div.querySelector(k)?.value || "").trim();
-  const e = { name: q(".e_name"), alt_name: div.dataset.alt || "" };
+  const e = { id: div.dataset.id || "", name: q(".e_name") };
   if (div.dataset.manuell) { e.manuell = true; return e; }
   e.von = q(".e_von"); e.bis = q(".e_bis") || e.von;
-  if (q(".e_lat") && q(".e_lon")) e.ort = { lat: +q(".e_lat"), lon: +q(".e_lon"), radius_km: +(q(".e_rad") || 5) };
-  const w = q(".e_wort"); if (w) e.schluesselwoerter = w.split(",").map((s) => s.trim()).filter(Boolean);
+  if (div._extra?.ort) e.ort = div._extra.ort;
+  if (div._extra?.schluesselwoerter) e.schluesselwoerter = div._extra.schluesselwoerter;
   if (div.querySelector(".e_ign").checked) e.ignorieren = true;
   if (!div.querySelector(".e_rb").checked) e.im_rueckblick = false;
   const ohne = JSON.parse(div.dataset.ohne || "[]").filter((t) => e.von && t >= e.von && t <= e.bis);
@@ -761,14 +841,18 @@ function leseEreignis(div) {
   return e;
 }
 function leseEreignisse() { return [...document.querySelectorAll("#ereignis_liste .ev")].map(leseEreignis); }
-// Jede Eingabe merkt sich der Entwurf (gespeichert nach kurzer Pause)
-document.addEventListener("input", (ev) => {
+// Jede Eingabe: Vorschau sofort aktualisieren und als Entwurf merken
+function ereignisEingabe(ev) {
   const div = ev.target.closest("#ereignis_liste .ev");
   if (!div) return;
-  if (ev.target.matches(".e_von, .e_bis")) { div._info = null; zeichneTage(div); zeichneZiel(div); }
-  if (ev.target.matches(".e_ign")) { div.classList.toggle("ignoriert", ev.target.checked); zeichneZiel(div); }
+  const bisFeld = div.querySelector(".e_bis");
+  if (ev.target.matches(".e_von") && (!bisFeld.value || bisFeld.value < ev.target.value)) bisFeld.value = ev.target.value;
+  if (ev.target.matches(".e_ign")) div.classList.toggle("ignoriert", ev.target.checked);
+  if (ev.target.matches(".e_von, .e_bis, .e_ign")) aktualisiereEreignis(div);
   ereignisAenderung();
-});
+}
+document.addEventListener("input", ereignisEingabe);
+document.addEventListener("change", ereignisEingabe);
 function ereignisAenderung() {
   ereignisGeaendert = true;
   $("ereignis_entwurf_zeit").textContent = "nicht gespeichert …";
@@ -789,15 +873,24 @@ function alleUebernehmen() { autoListe.forEach((_, i) => autoUebernehmen(i, fals
 async function ereignisseSpeichern() {
   const eigene = leseEreignisse().filter((e) => e.name);
   const ohneAlles = eigene.find((e) => !e.manuell && !e.von && !e.ort && !e.schluesselwoerter);
-  if (ohneAlles) { alert(`„${ohneAlles.name}“ braucht ein Datum, einen Ort oder Schlüsselwörter.`); return; }
-  const namen = eigene.map((e) => e.name), doppelt = namen.find((n, i) => namen.indexOf(n) !== i);
-  if (doppelt) { alert(`Der Name „${doppelt}“ kommt zweimal vor – bitte unterschiedliche Namen vergeben.`); return; }
-  const bleiben = new Set(eigene.map((e) => e.alt_name).filter(Boolean));
-  const geloescht = ereignisAltNamen.filter((n) => !bleiben.has(n));
+  if (ohneAlles) { alert(`„${ohneAlles.name}“ braucht ein Datum (von/bis).`); return; }
+  const bleiben = new Set(eigene.map((e) => e.id).filter(Boolean));
+  const geloescht = ereignisAltIds.filter((id) => !bleiben.has(id));
   clearTimeout(entwurfTimerE); ereignisGeaendert = false;
   naechsterTab = "ereignisse";
   await api("/api/ereignisse", { eigene, geloescht, neu_planen: true });
   $("ereignis_entwurf_zeit").textContent = "";
+  abfrageSofort();
+}
+async function ereignisseNeuErkennen(alles) {
+  const text = alles
+    ? "ALLE Ereignisse, eigenen Gruppen und Verschiebungen zwischen Ordnern verwerfen und die Ereignisse komplett neu erkennen?\n\n"
+    : "Alle Ereignisse verwerfen und neu erkennen lassen?\nEigene Gruppen (ohne Zeitraum) und deine Verschiebungen bleiben.\n\n";
+  if (!confirm(text + "Personen, Einstellungen, Sterne und Aussortiert/Behalten bleiben erhalten. Der jetzige Stand wird vorher gesichert (Einstellungen → Zwischenstände).")) return;
+  ereignisGeaendert = false; clearTimeout(entwurfTimerE);
+  naechsterTab = "ereignisse";
+  const r = await api("/api/ereignisse_neu", { alles });
+  if (!r.ok) alert(r.fehler || "Nicht möglich");
   abfrageSofort();
 }
 function zeigeImPruefen(ordner) {
@@ -813,7 +906,7 @@ function zeigeImPruefen(ordner) {
 async function entwuerfeSichern() {
   clearTimeout(entwurfTimerE); clearTimeout(entwurfTimerP);
   const auftraege = [];
-  if (ereignisGeaendert && $("ereignis_liste").children.length + ereignisAltNamen.length) {
+  if (ereignisGeaendert && $("ereignis_liste").children.length + ereignisAltIds.length) {
     ereignisGeaendert = false;
     auftraege.push(api("/api/entwurf", { teil: "ereignisse", daten: leseEreignisse() })
       .then((r) => $("ereignis_entwurf_zeit").textContent = `Entwurf automatisch gesichert (${r.zeit}) – noch nicht übernommen`));
@@ -1089,7 +1182,7 @@ function aktualisiereAuswahl() {
   $("auswahl_anzahl").textContent = auswahl.size;
   const sel = $("auswahl_ziel"), alt = sel.value;
   sel.innerHTML = `<option value="__alltag">Alltag / allgemein (kein Ereignis)</option>` +
-    (plan.ereignisse || []).map((e) => `<option value="${esc(e)}">${esc(e)}</option>`).join("") +
+    (plan.ereignisse || []).map((e) => `<option value="${esc(e.id)}">${esc(e.name)} – ${esc(e.ordner)}</option>`).join("") +
     `<option value="__neu">+ neue Gruppe / neuer Ordner …</option>`;
   if ([...sel.options].some((o) => o.value === alt)) sel.value = alt;
 }
@@ -1108,7 +1201,9 @@ async function auswahlVerschieben(festesZiel) {
     if (!ziel || !ziel.trim()) return;
     ziel = ziel.trim();
   }
-  const r = await api("/api/verschieben", { ids: [...auswahl], ereignis: ziel === "__alltag" ? null : ziel });
+  const neueGruppe = $("auswahl_ziel").value === "__neu" && !festesZiel;
+  const r = await api("/api/verschieben", ziel === "__alltag" ? { ids: [...auswahl] }
+    : neueGruppe ? { ids: [...auswahl], neu: ziel } : { ids: [...auswahl], id: ziel });
   if (!r.ok) { alert(r.fehler || "Nicht möglich"); return; }
   auswahl.clear(); aktualisiereAuswahl();
   const y = window.scrollY; await ladePlan(); window.scrollTo(0, y);

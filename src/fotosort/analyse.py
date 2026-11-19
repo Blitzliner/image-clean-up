@@ -21,7 +21,7 @@ import math
 import os
 import time
 import warnings
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
@@ -29,7 +29,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from . import gesichter as gesichter_mod
-from .fortschritt import Fortschritt
+from .fortschritt import Abgebrochen, Fortschritt
 from .metadaten import (
     bestimme_zeit,
     erkenne_art,
@@ -294,6 +294,29 @@ def speichere_cache(pfad: Path, cache: dict) -> None:
     os.replace(tmp, pfad)
 
 
+def _sammle(pool, auftraege: dict, uebernehmen) -> None:
+    """Ergebnisse der Hilfsprozesse einsammeln, sobald sie fertig sind."""
+    from concurrent.futures import FIRST_COMPLETED, wait
+
+    from .fortschritt import pruefe_abbruch
+
+    offen = set(auftraege)
+    while offen:
+        # kurz warten statt blockieren -> „Abbrechen“ greift auch bei sehr großen Dateien sofort
+        fertig, offen = wait(offen, timeout=0.5, return_when=FIRST_COMPLETED)
+        pruefe_abbruch()
+        for auftrag in fertig:
+            k, p = auftraege[auftrag]
+            try:
+                info = auftrag.result()
+            except BrokenProcessPool:
+                raise
+            except Exception as fehler:
+                print(f"  Fehler bei {p.name}: {fehler}")
+                info = None
+            uebernehmen(k, info)
+
+
 def analysiere_alle(cfg: dict) -> list[dict]:
     """Alle Quelldateien analysieren (parallel, mit Cache und Fortschrittsanzeige)."""
     print("Suche Dateien in den Quellordnern …")
@@ -348,16 +371,19 @@ def analysiere_alle(cfg: dict) -> list[dict]:
         try:
             with ProcessPoolExecutor(max_workers=prozesse) as pool:
                 auftraege = {pool.submit(analysiere_datei, str(p), optionen): (k, p) for k, p in offen}
-                for auftrag in as_completed(auftraege):
-                    k, p = auftraege[auftrag]
-                    try:
-                        info = auftrag.result()
-                    except BrokenProcessPool:
-                        raise
-                    except Exception as fehler:
-                        print(f"  Fehler bei {p.name}: {fehler}")
-                        info = None
-                    uebernehmen(k, info)
+                try:
+                    _sammle(pool, auftraege, uebernehmen)
+                except Abgebrochen:
+                    # Wartende Aufträge verwerfen, bisherige Ergebnisse bleiben im Cache
+                    laufend = list((getattr(pool, "_processes", None) or {}).values())
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    for prozess in laufend:
+                        try:  # laufende Hilfsprozesse sofort beenden
+                            prozess.kill()
+                        except (OSError, AttributeError):
+                            pass
+                    speichere_cache(cache_pfad, cache)
+                    raise
         except BrokenProcessPool:
             # Ein Hilfsprozess ist abgestürzt (meist zu wenig Arbeitsspeicher bei
             # riesigen Dateien) -> den Rest nacheinander im Hauptprozess einlesen

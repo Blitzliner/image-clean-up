@@ -15,6 +15,58 @@ _lock = threading.Lock()
 _aktuell: dict = {}
 
 
+# ---------------------------------------------------------------------------
+# Abbrechen: Die Oberfläche setzt das Signal, jeder Fortschritts-Schritt prüft
+# es. Laufende Hilfsprogramme (ffmpeg, Bilderkennung) werden sofort beendet.
+# ---------------------------------------------------------------------------
+class Abgebrochen(BaseException):
+    """
+    Der Benutzer hat den laufenden Auftrag abgebrochen. Abgeleitet von
+    BaseException (wie Strg+C), damit kein „except Exception“ den Abbruch schluckt.
+    """
+
+
+_abbruch = threading.Event()
+_prozesse: set = set()
+
+
+def abbrechen() -> None:
+    _abbruch.set()
+    with _lock:
+        laufend = list(_prozesse)
+    for p in laufend:
+        try:
+            p.kill()
+        except OSError:
+            pass
+
+
+def abbruch_zuruecksetzen() -> None:
+    _abbruch.clear()
+
+
+def abbruch_angefordert() -> bool:
+    return _abbruch.is_set()
+
+
+def pruefe_abbruch() -> None:
+    if _abbruch.is_set():
+        raise Abgebrochen("vom Benutzer abgebrochen")
+
+
+def prozess_merken(p) -> None:
+    """Hilfsprozess registrieren, damit „Abbrechen“ ihn beenden kann."""
+    with _lock:
+        _prozesse.add(p)
+    if _abbruch.is_set():
+        p.kill()
+
+
+def prozess_vergessen(p) -> None:
+    with _lock:
+        _prozesse.discard(p)
+
+
 def _dauer(sekunden: float) -> str:
     if sekunden < 90:
         return f"{max(1, int(sekunden))} s"
@@ -54,6 +106,7 @@ class Fortschritt:
                              "gesamt": self.gesamt, "rest_s": rest})
 
     def schritt(self, n: int = 1):
+        pruefe_abbruch()
         self.erledigt += n
         jetzt = time.time()
         vergangen = jetzt - self.start
@@ -111,6 +164,7 @@ class Schritt:
         self.nr, self.gesamt, self.name = nr, gesamt, name
 
     def __enter__(self):
+        pruefe_abbruch()
         self.start = time.time()
         with _lock:
             _schritt.update({"nr": self.nr, "gesamt": self.gesamt, "name": self.name,

@@ -47,12 +47,24 @@ uv run fotosort ui
    (mild / normal / streng / sehr streng), Alltag als **ein Ordner pro Jahr** oder pro Monat,
    Themen-Ordner, Rückblick-Optionen → **Speichern & analysieren**.
 2. **Ereignisse** – erkannte Reisen und Vorschläge (auch Zeiträume mit vielen Fotos ohne GPS)
-   übernehmen und benennen → **Speichern & neu einteilen**. Jedes Ereignis zeigt **5 Beispielbilder**
-   und genau, **in welchen Ordner wie viele Fotos und Videos** kommen
+   übernehmen und benennen → **Speichern & neu einteilen**. Jedes Ereignis zeigt **jeden Tag mit
+   2 Bildern und der Anzahl Dateien** und genau, **in welchen Ordner wie viele Fotos und Videos** kommen
    (z.B. „→ Ordner `2026/2026-05_Urlaub_Frankreich`: 120 Fotos, 8 Videos, davon 14 in Aussortiert“;
    „in Bilder prüfen ansehen“ springt direkt hin).
-   - **Tage anklicken** nimmt einzelne Tage heraus (durchgestrichen → Bilder kommen in den Alltag).
-   - **✂ teilen** und dann einen Tag anklicken: ab diesem Tag beginnt ein zweites Ereignis.
+   - **Tag anklicken** nimmt ihn heraus (grau → Bilder kommen in den Alltag); darüber steht sofort,
+     wie viele Dateien im Ereignis bleiben und wie viele herausfallen.
+   - **✂ teilen** und dann einen Tag anklicken: ab diesem Tag beginnt ein zweites Ereignis
+     (beim Zeigen sind die Tage markiert, die in Teil 2 wandern).
+   - **Datum ändern** zeigt sofort die Bilder der neuen Tage.
+   - **Gleiche Namen sind erlaubt** (z.B. zweimal „Fontainebleau“ oder „Heimatbesuch“). Jedes Ereignis
+     hat intern eine eigene Kennung (`id` in `ereignisse.yaml`) und bekommt seinen eigenen Ordner –
+     im selben Monat notfalls mit `_2`.
+   - **Themen-Ordner** (Haus & Renovierung, Kinder, Mit Freunden) stehen in einem eigenen Kasten: Sie
+     entstehen aus dem Bildinhalt bzw. den Personen, nicht aus Zeiträumen – darum tauchen sie in
+     „Bilder prüfen“ als Ordner auf, aber nicht als Ereignis.
+   - **↺ Ereignisse neu erkennen** verwirft die Ereignisse und erkennt sie neu (z.B. nach geänderten
+     Einstellungen). Personen, Einstellungen, Sterne und Aussortiert/Behalten bleiben; „komplett neu“
+     verwirft zusätzlich eigene Gruppen und Verschiebungen. Vorher wird gesichert.
    - **+ Ereignis** legt eigene Ereignisse an, **+ Gruppe** einen eigenen Ordner ohne Zeitraum
      (z.B. „Allgemein“), in den nur Bilder kommen, die du in „Bilder prüfen“ hineinschiebst.
      Umbenennen/Löschen geht hier; deine Zuordnungen wandern beim Umbenennen mit.
@@ -80,6 +92,14 @@ uv run fotosort ui
    Deine Klicks (`korrekturen.json`) haben immer Vorrang vor der Automatik.
 5. **Ablegen & Rückblick** – auf das NAS kopieren/verschieben, dann Rückblick erstellen
    (Links zu PowerPoint und PDF).
+
+### Abbrechen
+
+Solange etwas läuft (Analyse, Neu einteilen, Ablegen, Komprimieren …), steht oben neben der
+Statusanzeige **■ Abbrechen**. Der Vorgang stoppt innerhalb von Sekunden; laufende Video-Umwandlungen
+und die Bilderkennung werden sofort beendet (halbfertige Dateien werden gelöscht, Originale bleiben).
+Bisherige Ergebnisse bleiben erhalten: Beim Einlesen ist alles bis dahin im Cache, beim Ablegen
+steht im Protokoll, was schon da ist – ein neuer Start macht dort weiter.
 
 ### Nichts geht verloren: Entwürfe & Zwischenstände
 

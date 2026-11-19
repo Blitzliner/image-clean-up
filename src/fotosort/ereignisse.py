@@ -85,6 +85,20 @@ def ortsname(lat: float, lon: float) -> str:
 # ---------------------------------------------------------------------------
 # ereignisse.yaml lesen/schreiben
 # ---------------------------------------------------------------------------
+def neue_id() -> str:
+    """Kurze, eindeutige Kennung für ein Ereignis (Namen dürfen sich wiederholen)."""
+    import uuid
+
+    return uuid.uuid4().hex[:8]
+
+
+def ereignis_schluessel(e: dict) -> str:
+    """Eigene Ereignisse: gespeicherte id; automatisch erkannte: aus dem Startdatum."""
+    if e.get("id"):
+        return str(e["id"])
+    return f"auto-{e.get('von')}-{sicherer_name(e.get('name', ''))}"
+
+
 def lade_ereignisse(pfad: str | Path) -> list[dict]:
     pfad = Path(pfad)
     if not pfad.exists():
@@ -92,18 +106,26 @@ def lade_ereignisse(pfad: str | Path) -> list[dict]:
     with open(pfad, encoding="utf-8") as f:
         daten = yaml.safe_load(f) or {}
     ereignisse = daten.get("ereignisse") or []
+    ohne_id = False
     for e in ereignisse:
+        if not e.get("id"):  # ältere Dateien: Kennung vergeben und gleich speichern
+            e["id"] = neue_id()
+            ohne_id = True
+        e["id"] = str(e["id"])
         e["von"] = _datum(e.get("von"))
         e["bis"] = _datum(e.get("bis")) or e["von"]
         # einzelne Tage, die NICHT zum Ereignis gehören sollen
         e["ohne_tage"] = sorted({_datum(t) for t in (e.get("ohne_tage") or [])})
+    if ohne_id:
+        speichere_ereignisse(pfad, ereignisse)
     return ereignisse
 
 
 def speichere_ereignisse(pfad: str | Path, ereignisse: list[dict]) -> None:
     kopf = (
         "# Deine Ereignisse. Du kannst diese Datei frei bearbeiten.\n"
-        "# Felder: name, von, bis (JJJJ-MM-TT), optional:\n"
+        "# Felder: name, von, bis (JJJJ-MM-TT), id (interne Kennung – nicht ändern;\n"
+        "#   derselbe Name darf mehrmals vorkommen), optional:\n"
         "#   ort: {lat: 48.4, lon: 2.6, radius_km: 30}\n"
         "#   schluesselwoerter: [Bouldern, Kletterhalle]   (im Datei-/Ordnernamen oder Ort)\n"
         "#   ignorieren: true   (automatisch erkannte Reise NICHT als Ordner anlegen –\n"
@@ -115,7 +137,10 @@ def speichere_ereignisse(pfad: str | Path, ereignisse: list[dict]) -> None:
     )
     sauber = []
     for e in ereignisse:
+        if not e.get("id"):
+            e["id"] = neue_id()
         s = {k: v for k, v in e.items() if not k.startswith("_") and v not in (None, [], "")}
+        s = {"id": s.pop("id"), **s}
         for k in ("von", "bis"):
             if isinstance(s.get(k), dt.date):
                 s[k] = s[k].isoformat()
@@ -327,6 +352,19 @@ def _monatsgruppe(t: dt.datetime) -> str:
     return f"{t:%Y-%m}_{MONATE[t.month - 1]}"
 
 
+def eindeutiger_ordner(belegt_von: dict, jahr: int, ordner: str, schluessel) -> str:
+    """Ordnername für `schluessel` – belegt ihn schon ein anderes Ereignis, mit _2, _3 …"""
+    for k, v in belegt_von.items():
+        if v == schluessel and k[0] == jahr:
+            return k[1]
+    name, n = ordner, 2
+    while (jahr, name) in belegt_von:
+        name = f"{ordner}_{n}"
+        n += 1
+    belegt_von[(jahr, name)] = schluessel
+    return name
+
+
 def ordne_zu(items: list[dict], cfg: dict, interaktiv: bool = False) -> list[dict]:
     """
     Jedem Bild "gruppe" (Ordnername) und "jahr" geben.
@@ -392,12 +430,14 @@ def ordne_zu(items: list[dict], cfg: dict, interaktiv: bool = False) -> list[dic
     # 1) Ereignisse mit Datum
     for i in items:
         i["ereignis"] = None
+        i["ereignis_id"] = None
         i["im_rueckblick"] = True
         if i["art"] == "screenshot":
             continue
         for e in mit_datum:
             if _passt(i, e):
                 i["ereignis"] = e["name"]
+                i["ereignis_id"] = ereignis_schluessel(e)
                 i["_ereignis_start"] = e["von"]
                 i["im_rueckblick"] = e.get("im_rueckblick", True)
                 break
@@ -413,12 +453,15 @@ def ordne_zu(items: list[dict], cfg: dict, interaktiv: bool = False) -> list[dic
             if letzter_tag is None or (tag - letzter_tag).days > cfg["reise"]["max_luecke_tage"] + 1:
                 besuch_start = tag
             i["ereignis"] = e["name"]
+            i["ereignis_id"] = ereignis_schluessel(e)
             i["_ereignis_start"] = besuch_start
             i["im_rueckblick"] = e.get("im_rueckblick", True)
             letzter_tag = tag
 
-    # 3) Ordnernamen festlegen
+    # 3) Ordnernamen festlegen. Gleiche Namen im selben Monat bekommen _2, _3 …,
+    #    damit verschiedene Ereignisse nie in einem Ordner zusammenfallen.
     verwendet: dict[str, dict] = {}
+    belegt_von: dict[tuple[int, str], tuple] = {}
     for i in items:
         t = _zeit(i)
         if i["art"] == "screenshot":
@@ -428,7 +471,8 @@ def ordne_zu(items: list[dict], cfg: dict, interaktiv: bool = False) -> list[dic
         elif i["ereignis"]:
             start = i["_ereignis_start"]
             i["jahr"] = start.year
-            i["gruppe"] = f"{start:%Y-%m}_{sicherer_name(i['ereignis'])}"
+            i["gruppe"] = eindeutiger_ordner(belegt_von, start.year, f"{start:%Y-%m}_{sicherer_name(i['ereignis'])}",
+                                            (i["ereignis_id"], start))
             i["gruppen_art"] = "ereignis"
             verwendet.setdefault(i["gruppe"], {"name": i["ereignis"], "art": "ereignis"})
         elif cfg["ordner"]["alltag"] == "monat":

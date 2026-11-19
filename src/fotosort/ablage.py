@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 from .bewertung import schreibe_sterne
-from .fortschritt import Fortschritt
+from .fortschritt import Abgebrochen, Fortschritt, pruefe_abbruch
 
 
 def _kopiere(quelle: Path, ziel: Path, versuche: int = 3) -> None:
@@ -171,7 +171,6 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
     for jahr in {i["jahr"] for i in items}:
         for zeile in lese_protokoll(Path(cfg["ziel"]) / str(jahr) / PROTOKOLL_NAME).values():
             frueher[zeile["ziel"]] = zeile.get("original", "")
-    gespart = 0
     themen_art = cfg["ablage"].get("themen_kopien", "hardlink")
     if not pruefe_speicherplatz(items, cfg):
         statistik["fehler"] = len(items)
@@ -179,6 +178,33 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
     fortschritt = Fortschritt("Ablegen", len(items), "Dateien")
     fehlerliste: list[str] = []
 
+    gespart_liste = [0]  # gesparte Bytes (Liste, damit die Schleife hochzählen kann)
+    try:
+        _ablegen_schleife(items, cfg, verschieben, statistik, frueher, fortschritt, fehlerliste,
+                          pro_jahr, themen_art, gespart_liste)
+    except Abgebrochen:
+        # Was schon abgelegt ist, ins Protokoll schreiben -> nächster Lauf macht dort weiter
+        _schreibe_protokolle(pro_jahr)
+        print(f"  Abgebrochen nach {fortschritt.erledigt} von {len(items)} Dateien. "
+              "Erneut „Ablegen“ macht dort weiter.")
+        raise
+    gespart = gespart_liste[0]
+    fortschritt.fertig()
+    if statistik["verkleinert"]:
+        menge = f"{gespart / 1e9:.1f} GB" if gespart >= 1e9 else f"{gespart / 1e6:.0f} MB"
+        print(f"  {statistik['verkleinert']} Fotos/Videos komprimiert – {menge.replace('.', ',')} gespart.")
+    _schreibe_protokolle(pro_jahr)
+    if fehlerliste:
+        datei = Path(cfg["_basis"]) / "ablage_fehler.txt"
+        datei.write_text("\n".join(fehlerliste), encoding="utf-8")
+        print(f"{len(fehlerliste)} Fehler – Liste in {datei}. Einfach erneut ablegen: "
+              f"bereits kopierte Dateien werden übersprungen.")
+    return statistik
+
+
+def _ablegen_schleife(items, cfg, verschieben, statistik, frueher, fortschritt, fehlerliste,
+                      pro_jahr, themen_art, gespart_liste) -> None:
+    """Die eigentliche Schleife von ablegen() (eigene Funktion, damit Abbrechen sauber geht)."""
     for nr, i in enumerate(items, start=1):
         quelle, ziel = Path(i["pfad"]), Path(i["ziel"])
         try:
@@ -209,6 +235,7 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
                 if i["art"] == "video" and cfg["ablage"].get("videos_komprimieren"):
                     neues_ziel = ziel.with_suffix(video_ziel_endung(ziel))
                     komprimiert, hinweis = video_komprimieren(quelle, neues_ziel, cfg)
+                    pruefe_abbruch()  # abgebrochen -> nicht noch das ganze Video kopieren
                     if komprimiert:
                         ziel = neues_ziel
                         i["ziel"] = str(ziel)
@@ -217,7 +244,7 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
                     komprimiert, _ = bild_komprimieren(quelle, ziel, cfg)
                 if komprimiert:
                     statistik["verkleinert"] += 1
-                    gespart += quelle.stat().st_size - ziel.stat().st_size
+                    gespart_liste[0] += quelle.stat().st_size - ziel.stat().st_size
                 elif verschieben:
                     _verschiebe(quelle, ziel)  # gleiches Laufwerk: nur umbenennen
                 else:
@@ -258,17 +285,6 @@ def ablegen(items: list[dict], cfg: dict) -> dict:
         # Protokoll zwischendurch sichern (bei Abbruch weiß man, was schon da ist)
         if nr % 1000 == 0:
             _schreibe_protokolle(pro_jahr)
-    fortschritt.fertig()
-    if statistik["verkleinert"]:
-        menge = f"{gespart / 1e9:.1f} GB" if gespart >= 1e9 else f"{gespart / 1e6:.0f} MB"
-        print(f"  {statistik['verkleinert']} Fotos/Videos komprimiert – {menge.replace('.', ',')} gespart.")
-    _schreibe_protokolle(pro_jahr)
-    if fehlerliste:
-        datei = Path(cfg["_basis"]) / "ablage_fehler.txt"
-        datei.write_text("\n".join(fehlerliste), encoding="utf-8")
-        print(f"{len(fehlerliste)} Fehler – Liste in {datei}. Einfach erneut ablegen: "
-              f"bereits kopierte Dateien werden übersprungen.")
-    return statistik
 
 
 def _schreibe_protokolle(pro_jahr: dict) -> None:

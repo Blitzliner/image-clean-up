@@ -130,39 +130,65 @@ def wende_ordner_korrekturen_an(items: list[dict], korrekturen: dict, cfg: dict,
                                 gruppen: list[dict]) -> int:
     """
     Manuell verschobene Bilder in ihr neues Ereignis (oder in den Alltag) setzen.
-    korrekturen[pfad]["ordner"] = {"ereignis": "Urlaub Frankreich"}  oder  {"ereignis": None}
-    Ein neuer Ereignisname legt einen neuen Ordner an (Startmonat = frühestes Bild).
+    korrekturen[pfad]["ordner"] = {"id": "a1b2c3d4", "ereignis": "Urlaub"}  oder  {"ereignis": None}
+    (ältere Dateien nur mit Name). Eine neue Gruppe legt einen neuen Ordner an
+    (Startmonat = frühestes Bild). Gleiche Namen sind erlaubt – entscheidend ist die id.
     """
-    from .ereignisse import MONATE, sicherer_name
+    from .ereignisse import MONATE, eindeutiger_ordner, lade_ereignisse, sicherer_name
 
     verschoben = [i for i in items if "ordner" in korrekturen.get(i["pfad"], {})
                   and i["art"] != "screenshot"]
     if not verschoben:
         return 0
-    # vorhandene Ereignis-Ordner: Name -> (Ordner, Jahr, im_rueckblick)
+    # Ziel einer Korrektur: Ereignis-Kennung (neu) oder nur Name (ältere korrekturen.json)
+    eigene = lade_ereignisse(cfg["ereignisse_datei"])
+    name_zu_id = {}
+    for e in eigene:
+        name_zu_id.setdefault(e["name"], e["id"])
+    id_zu_name = {e["id"]: e["name"] for e in eigene}
+    nr_verschoben = {id(i) for i in verschoben}
+    for j in items:  # Name -> Kennung eines Ereignisses, das gerade Bilder hat
+        if j.get("ereignis_id") and id(j) not in nr_verschoben:
+            name_zu_id.setdefault("§" + j["ereignis"], j["ereignis_id"])
+
+    def ziel_von(i):
+        o = korrekturen[i["pfad"]]["ordner"]
+        if o.get("id"):
+            return o["id"], id_zu_name.get(o["id"], o.get("ereignis") or "Gruppe")
+        name = o.get("ereignis")
+        if not name:
+            return None, None
+        return name_zu_id.get("§" + name) or name_zu_id.get(name) or f"name-{name}", name
+
+    # vorhandene Ereignis-Ordner: Kennung -> (Ordner, Jahr, im_rueckblick)
     vorhanden = {}
+    belegt_von = {}
     for i in items:
-        if i.get("ereignis") and i not in verschoben:
-            vorhanden.setdefault(i["ereignis"], (i["gruppe"], i["jahr"], i.get("im_rueckblick", True)))
-    neue_start: dict[str, dt.datetime] = {}
+        if i.get("ereignis_id") and id(i) not in nr_verschoben:
+            vorhanden.setdefault(i["ereignis_id"], (i["gruppe"], i["jahr"], i.get("im_rueckblick", True)))
+            belegt_von.setdefault((i["jahr"], i["gruppe"]), ("vorhanden", i["ereignis_id"]))
+    neue_start: dict[str, tuple] = {}
     for i in verschoben:
-        name = korrekturen[i["pfad"]]["ordner"].get("ereignis")
-        if name and name not in vorhanden:
+        eid, name = ziel_von(i)
+        if eid and eid not in vorhanden:
             t = _zeit(i)
-            neue_start[name] = min(neue_start.get(name, t), t)
-    for name, start in neue_start.items():
-        vorhanden[name] = (f"{start:%Y-%m}_{sicherer_name(name)}", start.year, True)
+            alt = neue_start.get(eid)
+            neue_start[eid] = (min(alt[0], t) if alt else t, name)
+    for eid, (start, name) in neue_start.items():
+        ordner = eindeutiger_ordner(belegt_von, start.year, f"{start:%Y-%m}_{sicherer_name(name)}", eid)
+        vorhanden[eid] = (ordner, start.year, True)
 
     bekannt = {g["gruppe"] for g in gruppen}
     for i in verschoben:
-        name = korrekturen[i["pfad"]]["ordner"].get("ereignis")
+        eid, name = ziel_von(i)
         t = _zeit(i)
-        if name:
-            i["gruppe"], i["jahr"], i["im_rueckblick"] = vorhanden[name]
-            i["ereignis"], i["gruppen_art"] = name, "ereignis"
+        if eid:
+            i["gruppe"], i["jahr"], i["im_rueckblick"] = vorhanden[eid]
+            i["ereignis"], i["ereignis_id"], i["gruppen_art"] = name, eid, "ereignis"
             art_name = {"name": name, "art": "ereignis"}
         else:
-            i["ereignis"], i["gruppen_art"], i["jahr"], i["im_rueckblick"] = None, "alltag", t.year, True
+            i["ereignis"], i["ereignis_id"] = None, None
+            i["gruppen_art"], i["jahr"], i["im_rueckblick"] = "alltag", t.year, True
             if cfg["ordner"]["alltag"] == "monat":
                 i["gruppe"] = f"{t:%Y-%m}_{MONATE[t.month - 1]}"
             else:

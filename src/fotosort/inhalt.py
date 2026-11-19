@@ -206,7 +206,7 @@ def _starte_arbeiter(cfg: dict, offen: list[dict], text_neu: bool) -> tuple[bool
     import tempfile
     from collections import deque
 
-    from .fortschritt import Fortschritt, aktivitaet
+    from .fortschritt import Fortschritt, aktivitaet, pruefe_abbruch, prozess_merken, prozess_vergessen
 
     ordner = Path(cfg["analyse"]["modell_ordner"]) / "clip"
     ordner.mkdir(parents=True, exist_ok=True)
@@ -229,6 +229,7 @@ def _starte_arbeiter(cfg: dict, offen: list[dict], text_neu: bool) -> tuple[bool
     try:
         prozess = subprocess.Popen(befehl, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                    text=True, encoding="utf-8", errors="replace", env=umgebung)
+        prozess_merken(prozess)  # „Abbrechen“ beendet ihn sofort
         erledigt = 0
         for zeile in prozess.stdout:
             zeile = zeile.rstrip()
@@ -243,6 +244,8 @@ def _starte_arbeiter(cfg: dict, offen: list[dict], text_neu: bool) -> tuple[bool
             elif zeile and zeile != "FERTIG":
                 letzte.append(zeile)
         code = prozess.wait()
+        prozess_vergessen(prozess)
+        pruefe_abbruch()
     finally:
         try:
             os.remove(auftrag_pfad)
